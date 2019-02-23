@@ -1,3 +1,7 @@
+class BinData; end
+
+require "./bindata/bitfield"
+
 class BinData
   macro inherited
     PARTS = [] of Nil
@@ -6,6 +10,9 @@ class BinData
       __build_methods__
     end
   end
+
+  @@bit_fields = [] of BitField
+  @@current_field : BitField? = nil
 
   def __format__ : IO::ByteFormat
     IO::ByteFormat::SystemEndian
@@ -50,7 +57,7 @@ class BinData
       		{% if part[4] %}
     				# There is a length calculation
     				%size = ({{part[4]}}).call.not_nil!
-    				%buf = Slice(UInt8).new(%size)
+    				%buf = Bytes.new(%size)
           	io.read(%buf)
           	@{{part[1]}} = String.new(%buf)
   				{% else %}
@@ -124,4 +131,24 @@ class BinData
     {% PARTS << {"string", name.id, "String".id, onlyif, length, nil, encoding} %}
     property {{name.id}} : String?
 	end
+
+  macro bits(size, name)
+    %field = @@current_field.not_nil!
+    %field.bits(size, name)
+
+    {% if size <= 8 %}
+
+      {% if size <= 8 %}
+      {% end %}
+    {% end %}
+  end
+
+  macro bit_field(&block)
+    @@current_field = BitField.new
+    @@bit_fields << @@current_field
+
+    {{block.body}}
+
+    @@current_field = nil
+  end
 end

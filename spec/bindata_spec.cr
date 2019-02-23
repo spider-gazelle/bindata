@@ -37,3 +37,26 @@ describe BinData do
     io2.to_slice.should eq(io.to_slice)
   end
 end
+
+describe BinData::BitField do
+  it "should parse values out of dense binary structures" do
+    io = IO::Memory.new
+    #io.write_bytes(0b1110_1110_1000_0000_u16, IO::ByteFormat::BigEndian)
+    io.write_byte(0b1110_1110_u8)
+    io.write_byte(0b1000_0000_u8)
+    io.write_bytes(0_u16)
+    io.write "hello".to_slice
+    io.rewind
+
+    bf = BinData::BitField.new
+    bf.bits 7, :seven
+    bf.bits 2, :two
+    bf.bits 23, :three
+    bf.apply
+
+    bf.read(io, IO::ByteFormat::LittleEndian)
+    bf[:seven].should eq(0b1110111)
+    bf[:two].should eq(0b01)
+    bf[:three].should eq(0)
+  end
+end
