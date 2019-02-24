@@ -25,31 +25,39 @@ class BinData::BitField
   end
 
   def shift(buffer, num_bits)
-    io = IO::Memory.new(buffer)
-    index = 0
     bytes = buffer.size
+    return buffer if bytes == 0
+
+    # Shift the one byte
+    if bytes == 1
+      buffer[0] = buffer[0] << num_bits
+      return buffer
+    end
+
+    # Shift the two bytes
+    io = IO::Memory.new(buffer)
+    value = io.read_bytes(UInt16, IO::ByteFormat::BigEndian)
+    io.pos = io.pos - 2
+    value = value << num_bits
+    io.write_bytes(value, IO::ByteFormat::BigEndian)
+
+    return buffer if bytes == 2
+
+    # Adjust all the remaining bytes
+    index = 2
     loop do
-      # Is there 16 bits remaining?
-      if (index + 1) >= bytes
-        value = io.read_byte.not_nil!
-        io.pos = io.pos - 1
+      previous = index - 1
 
-        value = value << num_bits
-        io.write_bytes(value)
-      else
-        value = io.read_bytes(UInt16, IO::ByteFormat::BigEndian)
-        io.pos = io.pos - 2
-
-        value = value << num_bits
-        io.write_bytes(value, IO::ByteFormat::BigEndian)
-      end
+      # Shift the next bit (as a 16bit var so we get the overflow)
+      value = (0_u16 | buffer[index]) << num_bits
+      # Save the adjustment
+      buffer[index] = 0_u8 | value
+      # Save the shifted value
+      buffer[previous] = buffer[previous] | (value >> 8)
 
       # Move forward by 1 byte
       index += 1
       break if index >= bytes
-
-      # UInt16 write should have moved it forward by 2 bytes
-      io.pos = io.pos - 1
     end
     buffer
   end

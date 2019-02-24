@@ -5,6 +5,8 @@ require "./bindata/bitfield"
 class BinData
   macro inherited
     PARTS = [] of Nil
+    INDEX = [-1]
+    BIT_PARTS = [] of Nil
 
     macro finished
       __build_methods__
@@ -12,7 +14,6 @@ class BinData
   end
 
   @@bit_fields = [] of BitField
-  @@current_field : BitField? = nil
 
   def __format__ : IO::ByteFormat
     IO::ByteFormat::SystemEndian
@@ -64,6 +65,16 @@ class BinData
     				# Assume the string is 0 terminated
     				@{{part[1]}} = io.gets('\0')
   				{% end %}
+
+        {% elsif part[0] == "bitfield" %}
+          %bitfield = @@bit_fields[{{part[1]}}]
+          %bitfield.read(io, __format__)
+
+          # Apply the values (with their correct type)
+          {% for name, value in BIT_PARTS[part[1]] %}
+            %value = %bitfield[{{name.id.stringify}}]
+            @{{name}} = %value.as({{value[0]}})
+          {% end %}
     		{% end %}
 
         {% if part[3] %}
@@ -98,6 +109,19 @@ class BinData
       		{% if !part[4] %}
 						io.write_byte('\0')
   				{% end %}
+
+        {% elsif part[0] == "bitfield" %}
+          # Apply any values
+          {% for name, value in BIT_PARTS[part[1]] %}
+            {% if value[1] %}
+              %value = ({{value[1]}}).call
+              @{{name}} = %value || @{{name}}
+            {% end %}
+
+            @@bit_fields[{{part[1]}}][{{name.id.stringify}}] = @{{name}}.not_nil!
+          {% end %}
+
+          @@bit_fields[{{part[1]}}].write(io, __format__)
     		{% end %}
 
         {% if part[3] %}
@@ -117,6 +141,11 @@ class BinData
   # 4: length
   # 5: value
   # 6: encoding
+  macro uint8(name, onlyif = nil, value = nil)
+    {% PARTS << {"basic", name.id, "UInt8".id, onlyif, nil, value} %}
+    property {{name.id}} : UInt8?
+  end
+
   macro uint32(name, onlyif = nil, value = nil)
     {% PARTS << {"basic", name.id, "UInt32".id, onlyif, nil, value} %}
     property {{name.id}} : UInt32?
@@ -127,28 +156,43 @@ class BinData
     property {{name.id}} : Int32?
   end
 
-  macro string(name, onlyif = nil, length = nil, encoding = nil)
-    {% PARTS << {"string", name.id, "String".id, onlyif, length, nil, encoding} %}
+  macro string(name, onlyif = nil, length = nil, value = nil, encoding = nil)
+    {% PARTS << {"string", name.id, "String".id, onlyif, length, value, encoding} %}
     property {{name.id}} : String?
 	end
 
-  macro bits(size, name)
-    %field = @@current_field.not_nil!
-    %field.bits(size, name)
+  macro bits(size, name, value = nil)
+    %field = @@bit_fields[{{INDEX[0]}}]
+    %field.bits({{size}}, {{name.id.stringify}})
 
     {% if size <= 8 %}
-
-      {% if size <= 8 %}
-      {% end %}
+      {% BIT_PARTS[INDEX[0]][name.id] = {"UInt8".id, value} %}
+      property {{name.id}} : UInt8?
+    {% elsif size <= 16 %}
+      {% BIT_PARTS[INDEX[0]][name.id] = {"UInt16".id, value} %}
+      property {{name.id}} : UInt16?
+    {% elsif size <= 32 %}
+      {% BIT_PARTS[INDEX[0]][name.id] = {"UInt32".id, value} %}
+      property {{name.id}} : UInt32?
+    {% elsif size <= 64 %}
+      {% BIT_PARTS[INDEX[0]][name.id] = {"UInt64".id, value} %}
+      property {{name.id}} : UInt64?
+    {% elsif size <= 128 %}
+      {% BIT_PARTS[INDEX[0]][name.id] = {"UInt128".id, value} %}
+      property {{name.id}} : UInt128?
+    {% else %}
+      {{ "bits greater than 128 are not supported".id }}
     {% end %}
   end
 
-  macro bit_field(&block)
-    @@current_field = BitField.new
-    @@bit_fields << @@current_field
+  macro bit_field(onlyif = nil, &block)
+    @@bit_fields << BitField.new
+    {% INDEX[0] = INDEX[0] + 1 %}
+    {% BIT_PARTS << {} of Nil => Nil %}
 
     {{block.body}}
 
-    @@current_field = nil
+    @@bit_fields[{{INDEX[0]}}].apply
+    {% PARTS << {"bitfield", INDEX[0], nil, onlyif, nil, nil} %}
   end
 end

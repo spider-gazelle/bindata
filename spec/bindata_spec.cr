@@ -38,6 +38,21 @@ describe BinData do
   end
 end
 
+class Body < BinData
+  endian big
+
+  uint8 :start, value: ->{ 0_u8 }
+
+  bit_field do
+    bits 6,  :six,   value: ->{ 0b1110_11_u8 }
+    bits 3,  :three, value: ->{ 0b011_u8 }
+    bits 4,  :four,  value: ->{ 0b1001_u8 }
+    bits 11, :teen,  value: ->{ 0b1101_1111_101_u16 }
+  end
+
+  uint8 :end, value: ->{ 0_u8 }
+end
+
 describe BinData::BitField do
   it "should parse values out of dense binary structures" do
     io = IO::Memory.new
@@ -58,5 +73,33 @@ describe BinData::BitField do
     bf[:seven].should eq(0b1110111)
     bf[:two].should eq(0b01)
     bf[:three].should eq(0)
+  end
+
+  it "should parse an object from an IO" do
+    io = IO::Memory.new
+    io.write_byte 0b0_u8
+    io.write_byte 0b1110_1101_u8
+    io.write_byte 0b1100_1110_u8
+    io.write_byte 0b1111_1101_u8
+    io.write_byte 0b0_u8
+    io.rewind
+
+    r = Body.new
+    r.read io
+    r.start.should eq(0)
+    r.six.should eq(0b1110_11)
+    r.three.should eq(0b011)
+    r.four.should eq(0b1001)
+    r.teen.should eq(0b1101_1111_101)
+    r.end.should eq(0)
+  end
+
+  it "should write an object to an IO" do
+    io = IO::Memory.new
+    b = Body.new
+    b.write(io)
+    io.rewind
+
+    io.to_slice.should eq(1234)
   end
 end
