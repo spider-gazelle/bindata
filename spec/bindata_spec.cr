@@ -96,10 +96,18 @@ describe BinData::BitField do
 
   it "should write an object to an IO" do
     io = IO::Memory.new
-    b = Body.new
-    b.write(io)
+    io.write_byte 0b0_u8
+    io.write_byte 0b1110_1101_u8
+    io.write_byte 0b1100_1110_u8
+    io.write_byte 0b1111_1101_u8
+    io.write_byte 0b0_u8
     io.rewind
 
-    io.to_slice.should eq(1234)
+    io2 = IO::Memory.new
+    b = Body.new
+    b.write(io2)
+    io2.rewind
+
+    io2.to_slice.should eq(io.to_slice)
   end
 end
