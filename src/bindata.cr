@@ -37,7 +37,7 @@ class BinData
   def read(io : IO)
   end
 
-	def write(io : IO)
+  def write(io : IO)
   end
 
   macro __build_methods__
@@ -133,7 +133,7 @@ class BinData
     end
   end
 
-	# PARTS:
+  # PARTS:
   #	0: parse type
   # 1: var_name
   # 2: class
@@ -151,7 +151,7 @@ class BinData
     property {{name.id}} : UInt32?
   end
 
-	macro int32(name, onlyif = nil, value = nil)
+  macro int32(name, onlyif = nil, value = nil)
     {% PARTS << {"basic", name.id, "Int32".id, onlyif, nil, value} %}
     property {{name.id}} : Int32?
   end

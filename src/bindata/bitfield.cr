@@ -1,9 +1,4 @@
-
 class BinData::BitField
-  # Used to extract correct value once read from the buffer
-  ENDIAN_BUFFER = Bytes.new(16)
-  ENDIAN_IO = IO::Memory.new(ENDIAN_BUFFER)
-
   def initialize
     @bitsize = 0
     @mappings = {} of String => Int32
@@ -66,19 +61,25 @@ class BinData::BitField
     buffer
   end
 
-  macro format_value(value, klass, format)
-    if {{format}} != IO::ByteFormat::BigEndian
-      ENDIAN_IO.rewind
-      ENDIAN_IO.write_bytes({{value}}, IO::ByteFormat::BigEndian)
-      ENDIAN_IO.rewind
-      {{value}} = ENDIAN_IO.read_bytes({{klass}}, {{format}})
-    end
-  end
+  # Not used as this was misguided
+  # macro format_value(value, klass, format)
+  #  if {{format}} != IO::ByteFormat::BigEndian
+  #      ENDIAN_IO.rewind
+  #      ENDIAN_IO.write_bytes({{value}}, IO::ByteFormat::BigEndian)
+  #      ENDIAN_IO.rewind
+  #      {{value}} = ENDIAN_IO.read_bytes({{klass}}, {{format}})
+  #    end
+  #  end
 
   def read(input, format)
     # Fill the buffer
     buffer = @buffer.not_nil!
     input.read(buffer)
+
+    # Check if we need to re-order the bytes
+    if format == IO::ByteFormat::LittleEndian
+
+    end
 
     @mappings.each do |name, size|
       # Read out the data we are after using this buffer
@@ -88,70 +89,57 @@ class BinData::BitField
       if size <= 8
         value = io.read_bytes(UInt8, IO::ByteFormat::BigEndian)
 
-        if size == 8
-          buffer = buffer[1, buffer.size - 1]
-        else
+        if size < 8
           # Shift the bits we're interested in towards 0 (as they are high bits)
           value = value >> (8 - size)
           # Mask the bits we are interested in
           value = value & ((1_u8 << size) - 1_u8)
-          shift(buffer, size)
         end
       elsif size <= 16
         value = io.read_bytes(UInt16, IO::ByteFormat::BigEndian)
 
-        if size == 16
-          # A nice clean 2 bytes
-          buffer = buffer[2, buffer.size - 2]
-        else
+        if size < 16
           # Shift the bits we're interested in towards 0 (as they are high bits)
           value = value >> (16 - size)
           # Mask the bits we are interested in
           value = value & ((1_u16 << size) - 1_u16)
-          # Adjust the buffer
-          shift_by = 8 - (16 - size)
-          buffer = buffer[1, buffer.size - 1]
-          shift(buffer, shift_by)
         end
-
-        format_value(value, UInt16, format)
       elsif size <= 32
         value = io.read_bytes(UInt32, IO::ByteFormat::BigEndian)
 
-        if size == 32
-          buffer = buffer[4, buffer.size - 4]
-        else
+        if size < 32
           # Shift the bits we're interested in towards 0 (as they are high bits)
           value = value >> (32 - size)
           # Mask the bits we are interested in
           value = value & ((1_u32 << size) - 1_u32)
-
-          # Adjust the buffer
-          if size == 24
-            buffer = buffer[3, buffer.size - 3]
-          else
-            shift_by = if size < 24
-                          buffer = buffer[2, buffer.size - 2]
-                          8 - (24 - size)
-                        else
-                          buffer = buffer[3, buffer.size - 3]
-                          8 - (32 - size)
-                        end
-
-            shift(buffer, shift_by)
-          end
         end
-
-        format_value(value, UInt32, format)
       elsif size <= 64
         value = io.read_bytes(UInt64, IO::ByteFormat::BigEndian)
-        # TODO::
+        if size < 64
+          # Shift the bits we're interested in towards 0 (as they are high bits)
+          value = value >> (64 - size)
+          # Mask the bits we are interested in
+          value = value & ((1_u64 << size) - 1_u64)
+        end
       elsif size <= 128
-        # TODO::
         value = io.read_bytes(UInt128, IO::ByteFormat::BigEndian)
+        if size < 128
+          # Shift the bits we're interested in towards 0 (as they are high bits)
+          value = value >> (128 - size)
+          # Mask the bits we are interested in
+          value = value & ((1_u128 << size) - 1_u128)
+        end
       else
         raise "no support for structures larger than 128 bits"
       end
+
+      # relies on integer division rounding down
+      reduce_buffer = size / 8
+      buffer = buffer[reduce_buffer, buffer.size - reduce_buffer]
+
+      # Adjust the buffer
+      shift_by = size % 8
+      shift(buffer, shift_by) if shift_by > 0
 
       @values[name] = value
     end
@@ -172,7 +160,7 @@ class BinData::BitField
 
       value = @values[name]
       output.pos = start_byte
-      output.write_bytes(value, format)
+      output.write_bytes(value, IO::ByteFormat::BigEndian)
       bitpos += size
 
       # Move the bytes into position - byte aligned

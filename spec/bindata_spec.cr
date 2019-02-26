@@ -44,10 +44,10 @@ class Body < BinData
   uint8 :start, value: ->{ 0_u8 }
 
   bit_field do
-    bits 6,  :six,   value: ->{ 0b1110_11_u8 }
-    bits 3,  :three, value: ->{ 0b011_u8 }
-    bits 4,  :four,  value: ->{ 0b1001_u8 }
-    bits 11, :teen,  value: ->{ 0b1101_1111_101_u16 }
+    bits 6, :six, value: ->{ 0b1110_11_u8 }
+    bits 3, :three, value: ->{ 0b011_u8 }
+    bits 4, :four, value: ->{ 0b1001_u8 }
+    bits 11, :teen, value: ->{ 0b1101_1111_101_u16 }
   end
 
   uint8 :end, value: ->{ 0_u8 }
@@ -56,7 +56,7 @@ end
 describe BinData::BitField do
   it "should parse values out of dense binary structures" do
     io = IO::Memory.new
-    #io.write_bytes(0b1110_1110_1000_0000_u16, IO::ByteFormat::BigEndian)
+    # io.write_bytes(0b1110_1110_1000_0000_u16, IO::ByteFormat::BigEndian)
     io.write_byte(0b1110_1110_u8)
     io.write_byte(0b1000_0000_u8)
     io.write_bytes(0_u16)
