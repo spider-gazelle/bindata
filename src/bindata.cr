@@ -141,20 +141,14 @@ class BinData
   # 4: length
   # 5: value
   # 6: encoding
-  macro uint8(name, onlyif = nil, value = nil)
-    {% PARTS << {"basic", name.id, "UInt8".id, onlyif, nil, value} %}
-    property {{name.id}} : UInt8?
-  end
+  {% for vartype in ["UInt8", "Int8", "UInt16", "Int16", "UInt32", "Int32", "UInt64", "Int64", "UInt128", "Int128"] %}
+    {% name = vartype.downcase.id %}
 
-  macro uint32(name, onlyif = nil, value = nil)
-    {% PARTS << {"basic", name.id, "UInt32".id, onlyif, nil, value} %}
-    property {{name.id}} : UInt32?
-  end
-
-  macro int32(name, onlyif = nil, value = nil)
-    {% PARTS << {"basic", name.id, "Int32".id, onlyif, nil, value} %}
-    property {{name.id}} : Int32?
-  end
+    macro {{name}}(name, onlyif = nil, value = nil)
+      \{% PARTS << {"basic", name.id, {{vartype.id}}, onlyif, nil, value} %}
+      property \{{name.id}} : {{vartype.id}}?
+    end
+  {% end %}
 
   macro string(name, onlyif = nil, length = nil, value = nil, encoding = nil)
     {% PARTS << {"string", name.id, "String".id, onlyif, length, value, encoding} %}
