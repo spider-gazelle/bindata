@@ -156,6 +156,9 @@ class BinData::BitField
     @mappings.each do |name, size|
       offset = bitpos % 8
       start_byte = bitpos / 8
+
+      # The extra byte lets us easily write to the buffer
+      # without overwriting existing bytes
       start_byte += 1 if offset != 0
 
       value = @values[name]
@@ -163,7 +166,16 @@ class BinData::BitField
       output.write_bytes(value, IO::ByteFormat::BigEndian)
       bitpos += size
 
-      # Move the bytes into position - byte aligned
+      # Calculate how many full bytes to move back
+      extra_bytes = (((output.pos - start_byte) * 8) - size) / 8
+      if extra_bytes > 0
+        first_byte = start_byte + extra_bytes
+        (first_byte...bytes).each do |index|
+          buffer[index - extra_bytes] = buffer[index]
+        end
+      end
+
+      # Align the first bit with the start of the byte
       shift(buffer, 8 - (size % 8), start_byte)
 
       # We need to shift the bytes into the previous byte
