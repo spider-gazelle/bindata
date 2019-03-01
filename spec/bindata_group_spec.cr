@@ -21,10 +21,10 @@ describe BinData do
     r.end.should eq(0_u8)
   end
 
-  it "should parse a complex object from an IO" do
+  it "should parse a very complex object from an IO" do
     io = IO::Memory.new
     io.write_byte(0)
-    io.write_byte(0)
+    io.write_bytes 0
     io.write_byte(0)
     io.rewind
 

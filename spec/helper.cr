@@ -4,7 +4,7 @@ require "../src/bindata"
 class Header < BinData
   endian little
 
-  int32 :size, value: ->{ name.try &.bytesize || 0 }
+  int32 :size, value: ->{ name.bytesize }
   string :name, length: ->{ size }
 end
 
@@ -37,7 +37,7 @@ class Wow < BinData
   custom header : Header = Header.new
 
   group :body, onlyif: ->{ header.size > 0 } do
-    uint8 :start, value: ->{ 1_u8 }
+    uint8 :start, value: ->{ 1_u8 }, onlyif: ->{ parent.start == 0 }
     uint8 :end, value: ->{ 3_u8 }
   end
 

@@ -64,6 +64,11 @@ class BinData
       	{% if part[0] == "basic" %}
         	@{{part[1]}} = io.read_bytes({{part[2]}}, __format__)
 
+        {% elsif part[0] == "group" %}
+          @{{part[1]}} = {{part[2]}}.new
+          @{{part[1]}}.parent = self
+        	@{{part[1]}}.read(io)
+
      		{% elsif part[0] == "string" %}
       		{% if part[4] %}
     				# There is a length calculation
@@ -112,10 +117,14 @@ class BinData
         {% end %}
 
       	{% if part[0] == "basic" %}
-        	io.write_bytes(@{{part[1]}}.not_nil!, __format__)
+        	io.write_bytes(@{{part[1]}}, __format__)
+
+        {% elsif part[0] == "group" %}
+          @{{part[1]}}.parent = self
+          io.write_bytes(@{{part[1]}}, __format__)
 
      		{% elsif part[0] == "string" %}
-					io.write(@{{part[1]}}.not_nil!.to_slice)
+					io.write(@{{part[1]}}.to_slice)
       		{% if !part[4] %}
 						io.write_byte('\0')
   				{% end %}
@@ -208,11 +217,17 @@ class BinData
   #}# Encapsulates a bunch of fields by creating a nested BinData class
   macro group(name, onlyif = nil, value = nil, &block)
     class {{name.id.stringify.camelcase.id}} < BinData
+      # Group fields might need access to data in the parent
+      property parent : {{@type.id}}?
+      def parent
+        @parent.not_nil!
+      end
+
       {{block.body}}
     end
 
     property {{name.id}} = {{name.id.stringify.camelcase.id}}.new
 
-    {% PARTS << {"basic", name.id, name.id.stringify.camelcase.id, onlyif, nil, value, nil} %}
+    {% PARTS << {"group", name.id, name.id.stringify.camelcase.id, onlyif, nil, value, nil} %}
   end
 end
