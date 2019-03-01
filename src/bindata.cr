@@ -40,6 +40,16 @@ class BinData
   def write(io : IO)
   end
 
+  def to_io(io : IO, format : IO::ByteFormat = IO::ByteFormat::SystemEndian)
+    write(io)
+  end
+
+  def self.from_io(io : IO, format : IO::ByteFormat = IO::ByteFormat::SystemEndian)
+    data = self.new
+    data.read(io)
+    data
+  end
+
   macro __build_methods__
     def read(io : IO) : IO
       # Support inheritance
@@ -146,13 +156,13 @@ class BinData
 
     macro {{name}}(name, onlyif = nil, value = nil)
       \{% PARTS << {"basic", name.id, {{vartype.id}}, onlyif, nil, value} %}
-      property \{{name.id}} : {{vartype.id}}?
+      property \{{name.id}} : {{vartype.id}} = 0
     end
   {% end %}
 
   macro string(name, onlyif = nil, length = nil, value = nil, encoding = nil)
     {% PARTS << {"string", name.id, "String".id, onlyif, length, value, encoding} %}
-    property {{name.id}} : String?
+    property {{name.id}} : String = ""
 	end
 
   macro bits(size, name, value = nil)
@@ -188,5 +198,21 @@ class BinData
 
     @@bit_fields[{{INDEX[0]}}].apply
     {% PARTS << {"bitfield", INDEX[0], nil, onlyif, nil, nil} %}
+  end
+
+  macro custom(name, onlyif = nil, value = nil, &block)
+    {% PARTS << {"basic", name.var, name.type, onlyif, nil, value, nil} %}
+    property {{name.id}}
+  end
+
+  #}# Encapsulates a bunch of fields by creating a nested BinData class
+  macro group(name, onlyif = nil, value = nil, &block)
+    class {{name.id.stringify.camelcase.id}} < BinData
+      {{block.body}}
+    end
+
+    property {{name.id}} = {{name.id.stringify.camelcase.id}}.new
+
+    {% PARTS << {"basic", name.id, name.id.stringify.camelcase.id, onlyif, nil, value, nil} %}
   end
 end

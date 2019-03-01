@@ -1,12 +1,4 @@
-require "spec"
-require "../src/bindata"
-
-class Header < BinData
-  endian little
-
-  int32 :size, value: ->{ name.try &.bytesize || 0 }
-  string :name, length: ->{ size }
-end
+require "./helper"
 
 describe BinData do
   it "should parse an object from an IO" do
