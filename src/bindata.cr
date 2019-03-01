@@ -64,6 +64,10 @@ class BinData
       	{% if part[0] == "basic" %}
         	@{{part[1]}} = io.read_bytes({{part[2]}}, __format__)
 
+        {% elsif part[0] == "enum" %}
+          %value = io.read_bytes({{part[2]}}, __format__)
+          @{{part[1]}} = {{part[6]}}.from_value(%value)
+
         {% elsif part[0] == "group" %}
           @{{part[1]}} = {{part[2]}}.new
           @{{part[1]}}.parent = self
@@ -118,6 +122,10 @@ class BinData
 
       	{% if part[0] == "basic" %}
         	io.write_bytes(@{{part[1]}}, __format__)
+
+        {% elsif part[0] == "enum" %}
+          %value = {{part[2]}}.new(@{{part[1]}}.to_i)
+          io.write_bytes(%value, __format__)
 
         {% elsif part[0] == "group" %}
           @{{part[1]}}.parent = self
@@ -209,8 +217,13 @@ class BinData
     {% PARTS << {"bitfield", INDEX[0], nil, onlyif, nil, nil} %}
   end
 
-  macro custom(name, onlyif = nil, value = nil, &block)
+  macro custom(name, onlyif = nil, value = nil)
     {% PARTS << {"basic", name.var, name.type, onlyif, nil, value, nil} %}
+    property {{name.id}}
+  end
+
+  macro enum_field(size, name, onlyif = nil, value = nil)
+    {% PARTS << {"enum", name.var, size, onlyif, nil, value, name.type} %}
     property {{name.id}}
   end
 

@@ -43,3 +43,17 @@ class Wow < BinData
 
   uint8 :end, value: ->{ 0_u8 }
 end
+
+class EnumData < BinData
+  endian big
+
+  enum Inputs
+    VGA
+    HDMI
+    HDMI2
+  end
+
+  uint8 :start, value: ->{ 0_u8 }
+  enum_field UInt16, inputs : Inputs = Inputs::HDMI
+  uint8 :end, value: ->{ 0_u8 }
+end
