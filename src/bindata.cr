@@ -171,39 +171,56 @@ class BinData
   {% for vartype in ["UInt8", "Int8", "UInt16", "Int16", "UInt32", "Int32", "UInt64", "Int64", "UInt128", "Int128"] %}
     {% name = vartype.downcase.id %}
 
-    macro {{name}}(name, onlyif = nil, value = nil)
+    macro {{name}}(name, onlyif = nil, value = nil, default = nil)
       \{% PARTS << {"basic", name.id, {{vartype.id}}, onlyif, nil, value} %}
-      property \{{name.id}} : {{vartype.id}} = 0
+      property \{{name.id}} : {{vartype.id}} = \{% if default %} {{vartype.id}}.new(\{{default}}) \{% else %} 0 \{% end %}
     end
   {% end %}
 
-  macro string(name, onlyif = nil, length = nil, value = nil, encoding = nil)
+  macro string(name, onlyif = nil, length = nil, value = nil, encoding = nil, default = nil)
     {% PARTS << {"string", name.id, "String".id, onlyif, length, value, encoding} %}
-    property {{name.id}} : String = ""
+    property {{name.id}} : String = {% if default %} {{default}}.to_s {% else %} "" {% end %}
 	end
 
-  macro bits(size, name, value = nil)
+  macro bits(size, name, value = nil, default = nil)
     %field = @@bit_fields[{{INDEX[0]}}]
     %field.bits({{size}}, {{name.id.stringify}})
 
     {% if size <= 8 %}
       {% BIT_PARTS[INDEX[0]][name.id] = {"UInt8".id, value} %}
-      property {{name.id}} : UInt8?
+      property {{name.id}} : UInt8 = {% if default %} {{default}}.to_u8 {% else %} 0 {% end %}
     {% elsif size <= 16 %}
       {% BIT_PARTS[INDEX[0]][name.id] = {"UInt16".id, value} %}
-      property {{name.id}} : UInt16?
+      property {{name.id}} : UInt16 = {% if default %} {{default}}.to_u16 {% else %} 0 {% end %}
     {% elsif size <= 32 %}
       {% BIT_PARTS[INDEX[0]][name.id] = {"UInt32".id, value} %}
-      property {{name.id}} : UInt32?
+      property {{name.id}} : UInt32 = {% if default %} {{default}}.to_u32 {% else %} 0 {% end %}
     {% elsif size <= 64 %}
       {% BIT_PARTS[INDEX[0]][name.id] = {"UInt64".id, value} %}
-      property {{name.id}} : UInt64?
+      property {{name.id}} : UInt64 = {% if default %} {{default}}.to_u64 {% else %} 0 {% end %}
     {% elsif size <= 128 %}
       {% BIT_PARTS[INDEX[0]][name.id] = {"UInt128".id, value} %}
-      property {{name.id}} : UInt128?
+      property {{name.id}} : UInt128 = {% if default %} {{default}}.to_u128 {% else %} 0 {% end %}
     {% else %}
       {{ "bits greater than 128 are not supported".id }}
     {% end %}
+  end
+
+  macro enum_bits(size, name)
+    {% if name.value %}
+      bits({{size}}, {{name.var}}, default: {{name.value}}.to_i)
+    {% else %}
+      bits({{size}}, {{name.var}})
+    {% end %}
+
+    def {{name.var}} : {{name.type}}
+      {{name.type}}.from_value(@{{name.var}})
+    end
+
+    def {{name.var}}=(value : {{name.type}})
+      # Ensure the correct type is being assigned
+      @{{name.var}} = @{{name.var}}.class.new(0) | value.to_i
+    end
   end
 
   macro bit_field(onlyif = nil, &block)
