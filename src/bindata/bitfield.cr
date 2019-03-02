@@ -78,7 +78,6 @@ class BinData::BitField
 
     # Check if we need to re-order the bytes
     if format == IO::ByteFormat::LittleEndian
-
     end
 
     @mappings.each do |name, size|

@@ -223,6 +223,19 @@ class BinData
     end
   end
 
+  macro bool(name, default = false)
+    bits(1, {{name.id}}, default: ({{default}} ? 1 : 0) )
+
+    def {{name.id}} : Bool
+      @{{name.id}} == 1
+    end
+
+    def {{name.id}}=(value : Bool)
+      # Ensure the correct type is being assigned
+      @{{name.id}} = UInt8.new(value ? 1 : 0)
+    end
+  end
+
   macro bit_field(onlyif = nil, &block)
     @@bit_fields << BitField.new
     {% INDEX[0] = INDEX[0] + 1 %}
@@ -244,7 +257,7 @@ class BinData
     property {{name.id}}
   end
 
-  #}# Encapsulates a bunch of fields by creating a nested BinData class
+  # }# Encapsulates a bunch of fields by creating a nested BinData class
   macro group(name, onlyif = nil, value = nil, &block)
     class {{name.id.stringify.camelcase.id}} < BinData
       # Group fields might need access to data in the parent

@@ -56,7 +56,8 @@ class EnumData < BinData
   uint8 :start, value: ->{ 0_u8 }
   enum_field UInt16, inputs : Inputs = Inputs::HDMI
   bit_field do
-    bits 6, :reserved
+    bits 5, :reserved
+    bool enabled, default: false
     enum_bits 2, input : Inputs = Inputs::HDMI2
   end
   uint8 :end, value: ->{ 0_u8 }

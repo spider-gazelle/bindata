@@ -20,12 +20,13 @@ describe BinData do
     io = IO::Memory.new
     io.write_byte(0)
     io.write_bytes 1_u16, IO::ByteFormat::BigEndian
-    io.write_byte(1)
+    io.write_byte(5)
     io.write_byte(0)
     io.rewind
 
     r = EnumData.new
     r.input = EnumData::Inputs::HDMI
+    r.enabled = true
     io2 = IO::Memory.new
     r.write(io2)
     io2.rewind
