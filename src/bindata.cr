@@ -1,7 +1,3 @@
-class BinData; end
-
-require "./bindata/bitfield"
-
 class BinData
   macro inherited
     PARTS = [] of Nil
@@ -274,3 +270,5 @@ class BinData
     {% PARTS << {"group", name.id, name.id.stringify.camelcase.id, onlyif, nil, value, nil} %}
   end
 end
+
+require "./bindata/bitfield"
