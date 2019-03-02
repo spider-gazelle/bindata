@@ -20,15 +20,15 @@ end
 Then you can specify the structures fields. There are a few different field types:
 
 1. Core types
-  * `uint8`, `int128` which would accept `UInt8` and `Int128` values respectively
+   * `uint8`, `int128` which would accept `UInt8` and `Int128` values respectively
 2. Custom types
-  * anything that is [io serialisable](https://crystal-lang.org/api/0.27.2/IO.html#write_bytes%28object%2Cformat%3AIO%3A%3AByteFormat%3DIO%3A%3AByteFormat%3A%3ASystemEndian%29-instance-method)
+   * anything that is [io serialisable](https://crystal-lang.org/api/0.27.2/IO.html#write_bytes%28object%2Cformat%3AIO%3A%3AByteFormat%3DIO%3A%3AByteFormat%3A%3ASystemEndian%29-instance-method)
 3. Bit Fields
-  * These are a group of fields who values are defined by the number of bits used to represent their value
-  * The total number of bits in a bit field must be divisible by 8
+   * These are a group of fields who values are defined by the number of bits used to represent their value
+   * The total number of bits in a bit field must be divisible by 8
 4. Groups
-  * These are embedded BinData class with access to the parent fields
-  * Useful when a group of fields are related or optional
+   * These are embedded BinData class with access to the parent fields
+   * Useful when a group of fields are related or optional
 5. Enums and Bool
 
 
