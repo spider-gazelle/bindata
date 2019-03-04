@@ -60,6 +60,13 @@ class BinData
       	{% if part[0] == "basic" %}
         	@{{part[1]}} = io.read_bytes({{part[2]}}, __format__)
 
+        {% elsif part[0] == "array" %}
+          %size = ({{part[4]}}).call.not_nil!
+          @{{part[1]}} = [] of {{part[2]}}
+          (0...%size).each do
+        	  @{{part[1]}} << io.read_bytes({{part[2]}}, __format__)
+          end
+
         {% elsif part[0] == "enum" %}
           %value = io.read_bytes({{part[2]}}, __format__)
           @{{part[1]}} = {{part[6]}}.from_value(%value)
@@ -113,11 +120,21 @@ class BinData
         {% if part[5] %}
           # check if we need to configure the value
           %value = ({{part[5]}}).call
-					@{{part[1]}} = %value || @{{part[1]}}
+          # This ensures numbers are cooerced to the correct type
+          if %value.is_a?(Number)
+            @{{part[1]}} = {{part[2]}}.new(0) | %value
+          else
+            @{{part[1]}} = %value || @{{part[1]}}
+          end
         {% end %}
 
       	{% if part[0] == "basic" %}
         	io.write_bytes(@{{part[1]}}, __format__)
+
+        {% elsif part[0] == "array" %}
+          @{{part[1]}}.each do |part|
+            io.write_bytes(part, __format__)
+          end
 
         {% elsif part[0] == "enum" %}
           %value = {{part[2]}}.new(@{{part[1]}}.to_i)
@@ -251,6 +268,11 @@ class BinData
   macro enum_field(size, name, onlyif = nil, value = nil)
     {% PARTS << {"enum", name.var, size, onlyif, nil, value, name.type} %}
     property {{name.id}}
+  end
+
+  macro array(name, length, onlyif = nil, value = nil)
+    {% PARTS << {"array", name.var, name.type, onlyif, length, value, nil} %}
+    property {{name.var}} : Array({{name.type}}) = {% if name.value %} {{name.value}} {% else %} [] of {{name.type}} {% end %}
   end
 
   # }# Encapsulates a bunch of fields by creating a nested BinData class

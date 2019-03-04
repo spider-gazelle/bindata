@@ -62,3 +62,12 @@ class EnumData < BinData
   end
   uint8 :end, value: ->{ 0_u8 }
 end
+
+class ArrayData < BinData
+  endian big
+
+  uint8 :flen, default: 1, value: ->{ first.size }
+  array first : Int16 = [15_i16], length: ->{ flen }
+  uint8 :slen, value: ->{ 0_u8 | second.size }
+  array second : Int8, length: ->{ slen }
+end
