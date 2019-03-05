@@ -18,7 +18,7 @@ class BinData
   macro endian(format)
     def __format__ : IO::ByteFormat
       {% format = format.id.stringify %}
-      {% if format == "litte" %}
+      {% if format == "little" %}
       	IO::ByteFormat::LittleEndian
       {% elsif format == "big" %}
 				IO::ByteFormat::BigEndian
