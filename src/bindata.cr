@@ -30,10 +30,12 @@ class BinData
   	end
   end
 
-  def read(io : IO)
+  def read(io : IO) : IO
+    io
   end
 
-  def write(io : IO)
+  def write(io : IO) : IO
+    io
   end
 
   def to_io(io : IO, format : IO::ByteFormat = IO::ByteFormat::SystemEndian)
@@ -81,7 +83,7 @@ class BinData
     				# There is a length calculation
     				%size = ({{part[4]}}).call.not_nil!
     				%buf = Bytes.new(%size)
-          	io.read(%buf)
+          	io.read_fully(%buf)
           	@{{part[1]}} = String.new(%buf)
   				{% else %}
     				# Assume the string is 0 terminated
