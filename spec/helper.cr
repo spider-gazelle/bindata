@@ -1,5 +1,6 @@
 require "spec"
 require "../src/bindata"
+require "../src/bindata/asn1"
 
 class Header < BinData
   endian little

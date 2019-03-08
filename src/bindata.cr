@@ -31,10 +31,18 @@ class BinData
   end
 
   def read(io : IO) : IO
+    __perform_read__(io)
+  end
+
+  protected def __perform_read__(io : IO) : IO
     io
   end
 
   def write(io : IO) : IO
+    __perform_write__(io)
+  end
+
+  protected def __perform_write__(io : IO) : IO
     io
   end
 
@@ -49,7 +57,7 @@ class BinData
   end
 
   macro __build_methods__
-    def read(io : IO) : IO
+    protected def __perform_read__(io : IO) : IO
       # Support inheritance
       super(io)
 
@@ -109,7 +117,7 @@ class BinData
       io
     end
 
-		def write(io : IO) : IO
+		protected def __perform_write__(io : IO) : IO
       # Support inheritance
       super(io)
 
