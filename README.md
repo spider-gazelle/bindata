@@ -88,3 +88,25 @@ The object above can then be accessed like any other object
   pack.set_input # => true
   pack.extended.start # => 255
 ```
+
+
+## ASN.1 Helpers
+
+Included in this library are helpers for decoding and writing ASN.1 data, such as those used in SNMP and LDAP
+
+```crystal
+require "bindata/asn1"
+
+# Build an object
+ber = ASN1::BER.new
+ber.tag_number = ASN1::BER::UniversalTags::Integer
+ber.payload = Bytes[1]
+
+# Write it to an IO:
+io.write_bytes(ber)
+
+# Read data out of an IO:
+ber = io.read_bytes(ASN1::BER)
+ber.tag_class # => ASN1::BER::TagClass::Universal
+
+```

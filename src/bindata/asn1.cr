@@ -16,9 +16,9 @@ module ASN1
       Boolean
       Integer
       BitString
-      OctetString
+      OctetString # Hex values of the payload. Bytes[0x01, 0x02] == "0102"
       Null
-      ObjectIdentifier
+      ObjectIdentifier # The tree like structure for objects 1.234.2.45.23 etc
       ObjectDescriptor
       External
       Float
@@ -28,8 +28,8 @@ module ASN1
       RelativeOID
       Reserved1
       Reserved2
-      Sequence
-      Set
+      Sequence # like a c-struct ordered list of objects
+      Set      # set of objects no ordering
       NumericString
       PrintableString
       T61String
@@ -41,7 +41,7 @@ module ASN1
       VisibleString
       GeneralString
       UniversalString
-      CharacterString
+      CharacterString # Probably ASCII or UTF8
       BMPString
     end
 
