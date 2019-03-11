@@ -74,12 +74,21 @@ module ASN1
       @identifier.tag_number = 0b00011111_u8 & tag.to_i
     end
 
+    def tag
+      raise "only valid for universal tags" unless tag_class == TagClass::Universal
+      UniversalTags.from_value tag_number
+    end
+
     def extended?
       @identifier.extended? ? @identifier.extended : nil
     end
 
     def extended=(parts : Array(ExtendedIdentifier))
       @identifier.extended = parts
+    end
+
+    def extended
+      @identifier.extended
     end
 
     def size
@@ -115,6 +124,48 @@ module ASN1
       io.write(@payload)
       io.write_bytes(0_u16) if @length.indefinite?
       io
+    end
+
+    # Check if this can be expanded into multiple sub-entries
+    def sequence?
+      return false unless tag_class == TagClass::Universal
+      tag = UniversalTags.from_value tag_number
+      constructed && {UniversalTags::Sequence, UniversalTags::Set}.includes?(tag)
+    end
+
+    # Extracts children from the payload
+    def children
+      parts = [] of BER
+      io = IO::Memory.new(@payload)
+      while io.pos < io.size
+        parts << io.read_bytes(ASN1::BER)
+      end
+      parts
+    end
+
+    def inspect(io : IO) : Nil
+      io << "#<" << {{@type.name.id.stringify}} << ":0x"
+      object_id.to_s(16, io)
+
+      io << " tag_class="
+      tag_class.to_s(io)
+      io << " constructed="
+      constructed.to_s(io)
+      if tag_class == TagClass::Universal
+        io << " tag="
+        tag.to_s(io)
+      end
+      io << " tag_number="
+      tag_number.to_s(io)
+      io << " extended="
+      @identifier.extended?.to_s(io)
+      io << " size="
+      size.to_s(io)
+      io << " payload="
+      @payload.inspect(io)
+
+      io << ">"
+      nil
     end
   end
 end
