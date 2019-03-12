@@ -215,7 +215,7 @@ class ASN1::BER < BinData
     if @payload[0] == 0
       @payload[1, @payload.size - 1]
     else
-      skip = @payload[0]
+      # skip = @payload[0]
       raise "skip not implemented"
     end
   end

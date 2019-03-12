@@ -44,7 +44,7 @@ class ASN1::BER < BinData
     end
 
     def write(io : IO) : IO
-      tag_number = 0b11111_u8 if extended.size > 0
+      @tag_number = 0b11111_u8 if extended.size > 0
       super(io)
       extended.each_with_index do |ext, index|
         ext.more = (index + 1) < extended.size
