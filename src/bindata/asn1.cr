@@ -6,44 +6,11 @@ class BER < BinData; end
 
 require "./asn1/identifier"
 require "./asn1/length"
+require "./asn1/data_types"
 
 module ASN1
   class BER < BinData
     endian big
-
-    enum UniversalTags
-      EndOfContent
-      Boolean
-      Integer
-      BitString
-      OctetString # Hex values of the payload. Bytes[0x01, 0x02] == "0102"
-      Null
-      ObjectIdentifier # The tree like structure for objects 1.234.2.45.23 etc
-      ObjectDescriptor
-      External
-      Float
-      Enumerated
-      EmbeddedPDV
-      UTF8String
-      RelativeOID
-      Reserved1
-      Reserved2
-      Sequence # like a c-struct ordered list of objects
-      Set      # set of objects no ordering
-      NumericString
-      PrintableString
-      T61String
-      VideotexString
-      IA5String
-      UTCTime
-      GeneralizedTime
-      GraphicString
-      VisibleString
-      GeneralString
-      UniversalString
-      CharacterString # Probably ASCII or UTF8
-      BMPString
-    end
 
     # Components of a BER object
     custom identifier : Identifier = Identifier.new
@@ -70,8 +37,8 @@ module ASN1
       @identifier.tag_number
     end
 
-    def tag_number=(tag : Int | UniversalTags)
-      @identifier.tag_number = 0b00011111_u8 & tag.to_i
+    def tag_number=(tag_type : Int | UniversalTags)
+      @identifier.tag_number = tag_type.to_i.to_u8
     end
 
     def tag
