@@ -120,7 +120,7 @@ class ASN1::BER < BinData
   end
 
   def get_string
-    check_tags = {UniversalTags::UTF8String, UniversalTags::CharacterString, UniversalTags::PrintableString, UniversalTags::IA5String}
+    check_tags = {UniversalTags::UTF8String, UniversalTags::CharacterString, UniversalTags::PrintableString, UniversalTags::IA5String, UniversalTags::OctetString}
     raise InvalidTag.new("not a universal tag: #{tag_class}") unless tag_class == TagClass::Universal
     raise InvalidTag.new("object is a #{tag}, expecting one of #{check_tags}") unless check_tags.includes?(tag)
 
