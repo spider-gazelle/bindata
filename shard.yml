@@ -1,5 +1,5 @@
 name: bindata
-version: 1.0.2
+version: 1.0.3
 
 development_dependencies:
   ameba:
