@@ -35,23 +35,21 @@ class ASN1::BER < BinData
           @length = @length | (byte << (index * 8))
         end
       else
-        @length = 0 | length_indicator
+        @length = length_indicator.to_i32
       end
       io
     end
 
     def write(io : IO) : IO
-      long = true if @length >= 127
+      self.long = true if @length >= 127
 
-      if indefinite?
+      if long
         @long_bytes = [] of UInt8
-      elsif long
-        @long_bytes = [] of UInt8
-        io = IO::Memory.new(4)
-        io.write_bytes @length, IO::ByteFormat::BigEndian
+        temp_io = IO::Memory.new(4)
+        temp_io.write_bytes @length, IO::ByteFormat::BigEndian
 
         skip = true
-        io.to_slice.each do |byte|
+        temp_io.to_slice.each do |byte|
           if skip && byte == 0
             next
           else
@@ -60,9 +58,9 @@ class ASN1::BER < BinData
           end
         end
 
-        @length_indicator = 0_u8 | long_bytes.size
+        @length_indicator = @long_bytes.size.to_u8
       else
-        @length_indicator = 0_u8 | @length
+        @length_indicator = @length.to_u8
         @long_bytes = [] of UInt8
       end
 

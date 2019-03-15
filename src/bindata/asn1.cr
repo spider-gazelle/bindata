@@ -110,6 +110,14 @@ module ASN1
       parts
     end
 
+    def children=(parts : Array(BER))
+      self.constructed = true
+      io = IO::Memory.new
+      parts.each { |ber| ber.write(io) }
+      @payload = io.to_slice
+      parts
+    end
+
     def inspect(io : IO) : Nil
       io << "#<" << {{@type.name.id.stringify}} << ":0x"
       object_id.to_s(16, io)

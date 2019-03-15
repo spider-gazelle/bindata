@@ -26,11 +26,21 @@ describe ASN1 do
     io.to_slice.should eq(goal)
   end
 
-  it "should be able to read children" do
+  it "should be able to read and write children" do
     b = Bytes[48, 129, 139, 2, 1, 0, 4, 11, 53, 114, 78, 84, 103, 33, 112, 109, 49, 99, 107, 164, 121, 6, 8, 43, 6, 1, 6, 3, 1, 1, 5, 64, 4, 10, 230, 254, 28, 2, 1, 3, 2, 1, 0, 67, 4, 14, 162, 200, 72, 48, 91, 48, 15, 6, 10, 43, 6, 1, 2, 1, 2, 2, 1, 1, 26, 2, 1, 26, 48, 35, 6, 10, 43, 6, 1, 2, 1, 2, 2, 1, 2, 26, 4, 21, 71, 105, 103, 97, 98, 105, 116, 69, 116, 104, 101, 114, 110, 101, 116, 49, 47, 48, 47, 49, 57, 48, 15, 6, 10, 43, 6, 1, 2, 1, 2, 2, 1, 3, 26, 2, 1, 6, 48, 18, 6, 12, 43, 6, 1, 4, 1, 9, 2, 2, 1, 1, 20, 26, 4, 2, 117, 112]
     io = IO::Memory.new(b)
+    orig = io.read_bytes(ASN1::BER)
+    children = orig.children
+    children.size.should eq(3)
 
-    io.read_bytes(ASN1::BER).children.size.should eq(3)
+    io2 = IO::Memory.new
+    ber = ASN1::BER.new
+    ber.tag_number = ASN1::BER::UniversalTags::Sequence
+    ber.children = children
+    ber.write(io2)
+
+    ber.size.should eq(orig.size)
+    io2.to_slice.should eq(b)
   end
 
   it "should be able to read Object Identifiers" do
