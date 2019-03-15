@@ -174,8 +174,8 @@ describe ASN1 do
     io.read_bytes(ASN1::BER).get_bitstring.should eq(Bytes[0x1])
 
     # Not implemented:
-    #b = Bytes[0x03, 0x02, 0x4, 0x0, 0xF0]
-    #io = IO::Memory.new(b)
-    #io.read_bytes(ASN1::BER).get_bitstring.should eq(Bytes[0x0, 0xF])
+    # b = Bytes[0x03, 0x02, 0x4, 0x0, 0xF0]
+    # io = IO::Memory.new(b)
+    # io.read_bytes(ASN1::BER).get_bitstring.should eq(Bytes[0x0, 0xF])
   end
 end

@@ -1,12 +1,13 @@
 class ASN1::BER < BinData
   class InvalidTag < Exception; end
+
   class InvalidObjectId < Exception; end
 
   enum UniversalTags
     EndOfContent
     Boolean
     Integer
-    BitString # Binary data
+    BitString   # Binary data
     OctetString # Hex values of the payload. Bytes[0x01, 0x02] == "0102"
     Null
     ObjectIdentifier # The tree like structure for objects 1.234.2.45.23 etc
