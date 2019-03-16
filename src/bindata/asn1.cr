@@ -110,7 +110,7 @@ module ASN1
       parts
     end
 
-    def children=(parts : Array(BER))
+    def children=(parts)
       self.constructed = true
       io = IO::Memory.new
       parts.each { |ber| ber.write(io) }
