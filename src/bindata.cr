@@ -19,15 +19,15 @@ class BinData
     def __format__ : IO::ByteFormat
       {% format = format.id.stringify %}
       {% if format == "little" %}
-      	IO::ByteFormat::LittleEndian
+        IO::ByteFormat::LittleEndian
       {% elsif format == "big" %}
-				IO::ByteFormat::BigEndian
+        IO::ByteFormat::BigEndian
       {% elsif format == "network" %}
-				IO::ByteFormat::NetworkEndian
+        IO::ByteFormat::NetworkEndian
       {% else %}
-				IO::ByteFormat::SystemEndian
+        IO::ByteFormat::SystemEndian
       {% end %}
-  	end
+    end
   end
 
   def read(io : IO) : IO
@@ -67,14 +67,14 @@ class BinData
           if %onlyif
         {% end %}
 
-      	{% if part[0] == "basic" %}
-        	@{{part[1]}} = io.read_bytes({{part[2]}}, __format__)
+        {% if part[0] == "basic" %}
+          @{{part[1]}} = io.read_bytes({{part[2]}}, __format__)
 
         {% elsif part[0] == "array" %}
           %size = ({{part[4]}}).call.not_nil!
           @{{part[1]}} = [] of {{part[2]}}
           (0...%size).each do
-        	  @{{part[1]}} << io.read_bytes({{part[2]}}, __format__)
+            @{{part[1]}} << io.read_bytes({{part[2]}}, __format__)
           end
 
         {% elsif part[0] == "enum" %}
@@ -84,19 +84,19 @@ class BinData
         {% elsif part[0] == "group" %}
           @{{part[1]}} = {{part[2]}}.new
           @{{part[1]}}.parent = self
-        	@{{part[1]}}.read(io)
+          @{{part[1]}}.read(io)
 
-     		{% elsif part[0] == "string" %}
-      		{% if part[4] %}
-    				# There is a length calculation
-    				%size = ({{part[4]}}).call.not_nil!
-    				%buf = Bytes.new(%size)
-          	io.read_fully(%buf)
-          	@{{part[1]}} = String.new(%buf)
-  				{% else %}
-    				# Assume the string is 0 terminated
-    				@{{part[1]}} = io.gets('\0')
-  				{% end %}
+         {% elsif part[0] == "string" %}
+          {% if part[4] %}
+            # There is a length calculation
+            %size = ({{part[4]}}).call.not_nil!
+            %buf = Bytes.new(%size)
+            io.read_fully(%buf)
+            @{{part[1]}} = String.new(%buf)
+          {% else %}
+            # Assume the string is 0 terminated
+            @{{part[1]}} = io.gets('\0')
+          {% end %}
 
         {% elsif part[0] == "bitfield" %}
           %bitfield = @@bit_fields[{{part[1]}}]
@@ -107,7 +107,7 @@ class BinData
             %value = %bitfield[{{name.id.stringify}}]
             @{{name}} = %value.as({{value[0]}})
           {% end %}
-    		{% end %}
+        {% end %}
 
         {% if part[3] %}
           end
@@ -117,7 +117,7 @@ class BinData
       io
     end
 
-		protected def __perform_write__(io : IO) : IO
+    protected def __perform_write__(io : IO) : IO
       # Support inheritance
       super(io)
 
@@ -138,8 +138,8 @@ class BinData
           end
         {% end %}
 
-      	{% if part[0] == "basic" %}
-        	io.write_bytes(@{{part[1]}}, __format__)
+        {% if part[0] == "basic" %}
+          io.write_bytes(@{{part[1]}}, __format__)
 
         {% elsif part[0] == "array" %}
           @{{part[1]}}.each do |part|
@@ -154,11 +154,11 @@ class BinData
           @{{part[1]}}.parent = self
           io.write_bytes(@{{part[1]}}, __format__)
 
-     		{% elsif part[0] == "string" %}
-					io.write(@{{part[1]}}.to_slice)
-      		{% if !part[4] %}
-						io.write_byte('\0')
-  				{% end %}
+         {% elsif part[0] == "string" %}
+          io.write(@{{part[1]}}.to_slice)
+          {% if !part[4] %}
+            io.write_byte('\0')
+          {% end %}
 
         {% elsif part[0] == "bitfield" %}
           # Apply any values
@@ -172,7 +172,7 @@ class BinData
           {% end %}
 
           @@bit_fields[{{part[1]}}].write(io, __format__)
-    		{% end %}
+        {% end %}
 
         {% if part[3] %}
           end
@@ -184,7 +184,7 @@ class BinData
   end
 
   # PARTS:
-  #	0: parse type
+  #  0: parse type
   # 1: var_name
   # 2: class
   # 3: if_proc
@@ -203,7 +203,7 @@ class BinData
   macro string(name, onlyif = nil, length = nil, value = nil, encoding = nil, default = nil)
     {% PARTS << {"string", name.id, "String".id, onlyif, length, value, encoding} %}
     property {{name.id}} : String = {% if default %} {{default}}.to_s {% else %} "" {% end %}
-	end
+  end
 
   macro bits(size, name, value = nil, default = nil)
     %field = @@bit_fields[{{INDEX[0]}}]
