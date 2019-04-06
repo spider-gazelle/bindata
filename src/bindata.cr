@@ -184,7 +184,7 @@ class BinData
   end
 
   # PARTS:
-  #  0: parse type
+  # 0: parse type
   # 1: var_name
   # 2: class
   # 3: if_proc

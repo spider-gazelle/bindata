@@ -16,7 +16,7 @@ class ASN1::BER < BinData
     }
 
     # We can pretty much safely assume no protocol is implementing
-    # more than positive Int32 datagrams
+    # more than positive Int32 length datagrams
     property length : Int32 = 0
 
     def indefinite?

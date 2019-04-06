@@ -185,7 +185,7 @@ class BinData::BitField
         loop do
           previous = index - 1
 
-          # Shift the next bit (as a 16bit var so we get the overflow)
+          # Shift the next bit (as a 16bit var so we catch the overflow)
           value = (0_u16 | buffer[index]) << num_bits
           # Save the adjustment
           buffer[index] = 0_u8 | value
