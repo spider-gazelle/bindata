@@ -71,7 +71,7 @@ class BinData::BitField
   #    end
   #  end
 
-  def read(input, format)
+  def read(input, format) # ameba:disable Metrics/CyclomaticComplexity
     # Fill the buffer
     buffer = @buffer.not_nil!
     input.read(buffer)
