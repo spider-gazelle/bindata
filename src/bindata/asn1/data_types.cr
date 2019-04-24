@@ -42,6 +42,7 @@ class ASN1::BER < BinData
     raise InvalidTag.new("object is a #{tag}, expecting #{check_tag}") unless tag == check_tag
   end
 
+  # Returns the object ID in string format
   def get_object_id
     ensure_universal(UniversalTags::ObjectIdentifier)
     return "" if @payload.size == 0
@@ -70,6 +71,7 @@ class ASN1::BER < BinData
     object_id.join(".")
   end
 
+  # Sets a string representing an object ID
   def set_object_id(oid)
     value = oid.split(".").map &.to_i
 
@@ -105,14 +107,16 @@ class ASN1::BER < BinData
     self
   end
 
-  def get_octet_string
-    ensure_universal(UniversalTags::OctetString)
+  # Gets a hex representation of the bytes
+  def get_octet_string(universal = true, tag = UniversalTags::OctetString)
+    ensure_universal(tag) if universal
     @payload.hexstring
   end
 
-  def set_octet_string(string)
-    self.tag_class = TagClass::Universal
-    self.tag_number = UniversalTags::OctetString
+  # Sets bytes from a hexstring
+  def set_octet_string(string, tag = UniversalTags::OctetString, tag_class = TagClass::Universal)
+    self.tag_class = tag_class
+    self.tag_number = tag
 
     string = string.gsub(/(0x|[^0-9A-Fa-f])*/, "")
     string = "0#{string}" if string.size % 2 > 0
@@ -120,6 +124,12 @@ class ASN1::BER < BinData
     self
   end
 
+  # Returns the raw bytes
+  def get_bytes
+    @payload
+  end
+
+  # Returns a UTF8 string
   def get_string
     check_tags = {UniversalTags::UTF8String, UniversalTags::CharacterString, UniversalTags::PrintableString, UniversalTags::IA5String, UniversalTags::OctetString}
     raise InvalidTag.new("not a universal tag: #{tag_class}") unless tag_class == TagClass::Universal
@@ -128,8 +138,9 @@ class ASN1::BER < BinData
     String.new(@payload)
   end
 
-  def set_string(string, tag = UniversalTags::UTF8String)
-    self.tag_class = TagClass::Universal
+  # Sets a UTF8 string
+  def set_string(string, tag = UniversalTags::UTF8String, tag_class = TagClass::Universal)
+    self.tag_class = tag_class
     self.tag_number = tag
 
     @payload = string.to_slice
