@@ -218,7 +218,16 @@ class ASN1::BER < BinData
 
     bytes.write_byte(value < 0 ? 0xFF_u8 : 0x00_u8) if bytes.size == 0
 
-    @payload = bytes.to_slice
+    # Make sure positive integers don't start with 0xFF
+    payload_bytes = bytes.to_slice
+    if value >= 0 && payload_bytes[0] == 0xFF
+      io = IO::Memory.new
+      io.write_bytes 0x00_u8
+      io.write payload_bytes
+      payload_bytes = io.to_slice
+    end
+
+    @payload = payload_bytes
     self
   end
 

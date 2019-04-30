@@ -166,6 +166,14 @@ describe ASN1 do
     test.set_integer -0x502
     io.write_bytes(test)
     io.to_slice.should eq(b)
+
+    # Positive integers can't start with 0xff
+    b = Bytes[0x02, 0x03, 0, 255, 227]
+    io = IO::Memory.new
+    test = ASN1::BER.new
+    test.set_integer 65507
+    io.write_bytes(test)
+    io.to_slice.should eq(b)
   end
 
   it "should be able to get a Bitstring" do
