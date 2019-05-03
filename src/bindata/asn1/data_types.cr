@@ -220,7 +220,7 @@ class ASN1::BER < BinData
 
     # Make sure positive integers don't start with 0xFF
     payload_bytes = bytes.to_slice
-    if value >= 0 && payload_bytes[0] == 0xFF
+    if value > 0 && (payload_bytes[0] & 0b10000000) > 0
       io = IO::Memory.new
       io.write_bytes 0x00_u8
       io.write payload_bytes
