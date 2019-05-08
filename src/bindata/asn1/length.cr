@@ -32,7 +32,7 @@ class ASN1::BER < BinData
       elsif long
         @length = 0
         long_bytes.reverse.each_with_index do |byte, index|
-          @length = @length | (byte << (index * 8))
+          @length = @length | (byte.to_i32 << (index * 8))
         end
       else
         @length = length_indicator.to_i32
