@@ -108,13 +108,13 @@ class ASN1::BER < BinData
   end
 
   # Gets a hex representation of the bytes
-  def get_octet_string(universal = true, tag = UniversalTags::OctetString)
+  def get_hexstring(universal = true, tag = UniversalTags::OctetString)
     ensure_universal(tag) if universal
     @payload.hexstring
   end
 
   # Sets bytes from a hexstring
-  def set_octet_string(string, tag = UniversalTags::OctetString, tag_class = TagClass::Universal)
+  def set_hexstring(string, tag = UniversalTags::OctetString, tag_class = TagClass::Universal)
     self.tag_class = tag_class
     self.tag_number = tag
 
@@ -127,6 +127,14 @@ class ASN1::BER < BinData
   # Returns the raw bytes
   def get_bytes
     @payload
+  end
+
+  def set_bytes(data, tag = UniversalTags::OctetString, tag_class = TagClass::Universal)
+    self.tag_class = tag_class
+    self.tag_number = tag
+
+    @payload = data.to_slice
+    self
   end
 
   # Returns a UTF8 string
