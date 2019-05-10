@@ -79,8 +79,13 @@ module ASN1
         temp.rewind
         temp.read_fully(@payload)
       else
-        @payload = Bytes.new(@length.length)
-        io.read_fully(@payload)
+        begin
+          @payload = Bytes.new(@length.length)
+          io.read_fully(@payload)
+        rescue ArgumentError
+          # Typically occurs if length is negative
+          raise ArgumentError.new("invalid ASN.1 length: #{@length.length}")
+        end
       end
       io
     end

@@ -9,6 +9,7 @@ class ASN1::BER < BinData
 
     array long_bytes : UInt8, length: ->{
       if long && !indefinite?
+        raise "invalid ASN.1 BER length. Number of length bytes: #{length_indicator}" if length_indicator > 4
         0 | length_indicator
       else
         0
