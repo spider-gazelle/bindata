@@ -49,7 +49,7 @@ class ASN1::BER < BinData
 
     value0 = @payload[0].to_i32
     second = value0 % 40
-    first = (value0 - second) / 40
+    first = (value0 - second) // 40
     raise InvalidObjectId.new(@payload.inspect) if first > 2
     object_id = [first, second]
 

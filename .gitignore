@@ -5,3 +5,4 @@ lib
 app
 *.dwarf
 *.DS_Store
+bin/ameba

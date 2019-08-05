@@ -17,7 +17,7 @@ class BinData::BitField
   def apply
     raise "bit mappings must be divisible by 8" if @bitsize % 8 > 0
     # Extra byte used when writing to IO
-    @buffer = Bytes.new(@bitsize / 8)
+    @buffer = Bytes.new(@bitsize // 8)
   end
 
   def shift(buffer, num_bits, start_byte = 0)
@@ -133,7 +133,7 @@ class BinData::BitField
       end
 
       # relies on integer division rounding down
-      reduce_buffer = size / 8
+      reduce_buffer = size // 8
       buffer = buffer[reduce_buffer, buffer.size - reduce_buffer]
 
       # Adjust the buffer
@@ -148,13 +148,13 @@ class BinData::BitField
 
   def write(io, format)
     # Fill the buffer
-    bytes = (@bitsize / 8) + 1
+    bytes = (@bitsize // 8) + 1
     buffer = Bytes.new(bytes)
     output = IO::Memory.new(buffer)
     bitpos = 0
     @mappings.each do |name, size|
       offset = bitpos % 8
-      start_byte = bitpos / 8
+      start_byte = bitpos // 8
 
       # The extra byte lets us easily write to the buffer
       # without overwriting existing bytes
@@ -166,7 +166,7 @@ class BinData::BitField
       bitpos += size
 
       # Calculate how many full bytes to move back
-      extra_bytes = (((output.pos - start_byte) * 8) - size) / 8
+      extra_bytes = (((output.pos - start_byte) * 8) - size) // 8
       if extra_bytes > 0
         first_byte = start_byte + extra_bytes
         (first_byte...bytes).each do |index|
