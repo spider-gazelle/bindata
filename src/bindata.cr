@@ -102,7 +102,7 @@ class BinData
             @{{part[1]}} = String.new(%buf)
           {% else %}
             # Assume the string is 0 terminated
-            @{{part[1]}} = io.gets('\0')
+            @{{part[1]}} = (io.gets('\0') || "")[0..-2]
           {% end %}
 
         {% elsif part[0] == "bitfield" %}
@@ -167,7 +167,7 @@ class BinData
         {% elsif part[0] == "string" %}
           io.write(@{{part[1]}}.to_slice)
           {% if !part[4] %}
-            io.write_byte('\0')
+            io.write_byte(0_u8)
           {% end %}
 
         {% elsif part[0] == "bitfield" %}
