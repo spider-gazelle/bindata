@@ -86,7 +86,14 @@ class BinData
           @{{part[1]}}.parent = self
           @{{part[1]}}.read(io)
 
-         {% elsif part[0] == "string" %}
+        {% elsif part[0] == "bytes" %}
+          # There is a length calculation
+          %size = ({{part[4]}}).call.not_nil!
+          %buf = Bytes.new(%size)
+          io.read_fully(%buf)
+          @{{part[1]}} = %buf
+
+        {% elsif part[0] == "string" %}
           {% if part[4] %}
             # There is a length calculation
             %size = ({{part[4]}}).call.not_nil!
@@ -154,7 +161,10 @@ class BinData
           @{{part[1]}}.parent = self
           io.write_bytes(@{{part[1]}}, __format__)
 
-         {% elsif part[0] == "string" %}
+        {% elsif part[0] == "bytes" %}
+          io.write(@{{part[1]}})
+
+        {% elsif part[0] == "string" %}
           io.write(@{{part[1]}}.to_slice)
           {% if !part[4] %}
             io.write_byte('\0')
@@ -203,6 +213,11 @@ class BinData
   macro string(name, onlyif = nil, length = nil, value = nil, encoding = nil, default = nil)
     {% PARTS << {"string", name.id, "String".id, onlyif, length, value, encoding} %}
     property {{name.id}} : String = {% if default %} {{default}}.to_s {% else %} "" {% end %}
+  end
+
+  macro bytes(name, length, onlyif = nil, value = nil, default = nil)
+    {% PARTS << {"bytes", name.id, "Bytes".id, onlyif, length, value, nil} %}
+    property {{name.id}} : Bytes = {% if default %} {{default}}.to_slice {% else %} Bytes.new(0) {% end %}
   end
 
   macro bits(size, name, value = nil, default = nil)
