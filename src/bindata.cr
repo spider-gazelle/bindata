@@ -15,6 +15,12 @@ class BinData
     IO::ByteFormat::SystemEndian
   end
 
+  def to_slice
+    io = IO::Memory.new
+    io.write_bytes self
+    io.to_slice
+  end
+
   macro endian(format)
     def __format__ : IO::ByteFormat
       {% format = format.id.stringify %}
