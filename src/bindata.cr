@@ -84,7 +84,7 @@ class BinData
           end
 
         {% elsif part[0] == "enum" %}
-          %value = io.read_bytes({{part[2]}}, __format__)
+          %value = io.read_bytes({{part[2]}}, __format__).to_i
           @{{part[1]}} = {{part[6]}}.from_value(%value)
 
         {% elsif part[0] == "group" %}
