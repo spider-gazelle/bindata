@@ -207,7 +207,7 @@ class BinData
   # 4: length
   # 5: value
   # 6: encoding
-  {% for vartype in ["UInt8", "Int8", "UInt16", "Int16", "UInt32", "Int32", "UInt64", "Int64", "UInt128", "Int128"] %}
+  {% for vartype in ["UInt8", "Int8", "UInt16", "Int16", "UInt32", "Int32", "UInt64", "Int64", "UInt128", "Int128", "Float32", "Float64"] %}
     {% name = vartype.downcase.id %}
 
     macro {{name}}(name, onlyif = nil, value = nil, default = nil)
