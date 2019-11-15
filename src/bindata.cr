@@ -75,9 +75,9 @@ class BinData
 
         {% if part[0] == "basic" %}
           {% part_type = part[2].resolve %}
-          {% if part[2].is_a?(Union) %}
+          {% if part_type.is_a?(Union) %}
             @{{part[1]}} = io.read_bytes({{part[2].types[0]}}, __format__)
-          {% elsif part[2].union? %}
+          {% elsif part_type.union? %}
             @{{part[1]}} = io.read_bytes({{part[2].union_types[0]}}, __format__)
           {% else %}
             @{{part[1]}} = io.read_bytes({{part[2]}}, __format__)
