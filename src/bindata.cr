@@ -3,6 +3,7 @@ class BinData
     PARTS = [] of Nil
     INDEX = [-1]
     BIT_PARTS = [] of Nil
+    ENDIAN = ["system"]
 
     macro finished
       __build_methods__
@@ -24,6 +25,7 @@ class BinData
   macro endian(format)
     def __format__ : IO::ByteFormat
       {% format = format.id.stringify %}
+      {% ENDIAN[0] = format.id.stringify %}
       {% if format == "little" %}
         IO::ByteFormat::LittleEndian
       {% elsif format == "big" %}
@@ -325,6 +327,8 @@ class BinData
   # }# Encapsulates a bunch of fields by creating a nested BinData class
   macro group(name, onlyif = nil, value = nil, &block)
     class {{name.id.stringify.camelcase.id}} < BinData
+      endian({{ENDIAN[0]}})
+
       # Group fields might need access to data in the parent
       property parent : {{@type.id}}?
       def parent
