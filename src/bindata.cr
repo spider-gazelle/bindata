@@ -74,7 +74,14 @@ class BinData
         {% end %}
 
         {% if part[0] == "basic" %}
-          @{{part[1]}} = io.read_bytes({{part[2]}}, __format__)
+          {% part_type = part[2].resolve %}
+          {% if part[2].is_a?(Union) %}
+            @{{part[1]}} = io.read_bytes({{part[2].types[0]}}, __format__)
+          {% elsif part[2].union? %}
+            @{{part[1]}} = io.read_bytes({{part[2].union_types[0]}}, __format__)
+          {% else %}
+            @{{part[1]}} = io.read_bytes({{part[2]}}, __format__)
+          {% end %}
 
         {% elsif part[0] == "array" %}
           %size = ({{part[4]}}).call.not_nil!
@@ -152,7 +159,16 @@ class BinData
         {% end %}
 
         {% if part[0] == "basic" %}
-          io.write_bytes(@{{part[1]}}, __format__)
+          {% part_type = part[2].resolve %}
+          {% if part_type.is_a?(Union) || part_type.union? %}
+            if __temp_{{part[1]}} = @{{part[1]}}
+              io.write_bytes(__temp_{{part[1]}}, __format__)
+            else
+              raise NilAssertionError.new("unable to write nil value for #{self.class}##{{{part[1].stringify}}}")
+            end
+          {% else %}
+            io.write_bytes(@{{part[1]}}, __format__)
+          {% end %}
 
         {% elsif part[0] == "array" %}
           @{{part[1]}}.each do |part|
