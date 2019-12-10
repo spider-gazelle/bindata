@@ -172,63 +172,82 @@ class ASN1::BER < BinData
     ensure_universal(UniversalTags::Integer)
     return 0_i64 if @payload.size == 0
 
-    negative = false
-    start = 0_i64
-    len = @payload.size - 1
+    # Check if first bit is set indicating negativity
+    negative = (@payload[0] & 0x80) > 0
+    reverse_index = @payload.size - 1
 
-    if (@payload[0] & 0x80) > 0
-      negative = true
-      start = (~@payload[0]).to_i64 << (8 * len)
-    else
-      start = @payload[0].to_i64 << (8 * len)
-    end
+    # initialize the result with the first byte
+    start = if negative
+              (~@payload[0]).to_i64 << (8 * reverse_index)
+            else
+              @payload[0].to_i64 << (8 * reverse_index)
+            end
 
-    index = len
-    @payload.each do |byte|
-      if index == len
-        index -= 1
-        next
-      end
-
+    # place the remaining bytes into the structure
+    reverse_index -= 1
+    @payload[1..-1].each do |byte|
       byte = ~byte if negative
-      start += (byte.to_i64 << (index * 8))
-      index -= 1
+      start += (byte.to_i64 << (reverse_index * 8))
+      reverse_index -= 1
     end
 
     return -(start + 1) if negative
     start
   end
 
+  def get_integer_bytes : Bytes
+    ensure_universal(UniversalTags::Integer)
+    return Bytes.new(0) if @payload.size == 0
+    return Bytes[0] if @payload.size == 1 && {0xFF_u8, 0_u8}.includes?(@payload[0])
+    return @payload[1..-1] if @payload[0] == 0_u8
+    @payload
+  end
+
   def set_integer(value)
     self.tag_class = TagClass::Universal
     self.tag_number = UniversalTags::Integer
 
-    io = IO::Memory.new
-    io.write_bytes value, IO::ByteFormat::BigEndian
+    # extract the bytes from the value
+    if value.responds_to?(:to_io)
+      io = IO::Memory.new
+      io.write_bytes value, IO::ByteFormat::BigEndian
 
-    ignore = true
-    data = io.to_slice
+      data = io.to_slice
+      negative = value < 0
+    else
+      data = value.to_slice
+      negative = false
+    end
+
+    # The bytes to write
     bytes = IO::Memory.new
 
-    if value < 0
+    # Ignore padding bytes
+    ignore = true
+    if negative
       data.each do |byte|
-        next if ignore && byte == 0xFF
-        ignore = false
+        if ignore
+          next if byte == 0xFF
+          ignore = false
+        end
         bytes.write_byte byte
       end
     else
       data.each do |byte|
-        next if ignore && byte == 0x00
-        ignore = false
+        if ignore
+          next if byte == 0x00
+          ignore = false
+        end
         bytes.write_byte byte
       end
     end
 
-    bytes.write_byte(value < 0 ? 0xFF_u8 : 0x00_u8) if bytes.size == 0
+    # ensure there is at least one byte
+    bytes.write_byte(negative ? 0xFF_u8 : 0x00_u8) if bytes.size == 0
 
     # Make sure positive integers don't start with 0xFF
     payload_bytes = bytes.to_slice
-    if value > 0 && (payload_bytes[0] & 0b10000000) > 0
+    if !negative && (payload_bytes[0] & 0b10000000) > 0
       io = IO::Memory.new
       io.write_bytes 0x00_u8
       io.write payload_bytes
