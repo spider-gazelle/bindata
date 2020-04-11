@@ -29,10 +29,14 @@ Then you can specify the structures fields. There are a few different field type
 4. Groups
    * These are embedded BinData class with access to the parent fields
    * Useful when a group of fields are related or optional
-5. Enums and Bool
+5. Enums
+6. Bools
+6. Arrays (fixed size and dynamic)
 
 
 ### Examples
+
+see the [spec helper](https://github.com/spider-gazelle/bindata/blob/master/spec/helper.cr) for all possible manipulations
 
 ```crystal
   enum Inputs

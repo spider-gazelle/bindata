@@ -92,6 +92,14 @@ class BinData
             @{{part[1]}} << io.read_bytes({{part[2]}}, __format__)
           end
 
+        {% elsif part[0] == "variable_array" %}
+            @{{part[1]}} = [] of {{part[2]}}
+            loop do
+              # Stop if the callback indicates there is no more
+              break unless ({{part[4]}}).call(@{{part[1]}})
+              @{{part[1]}} << io.read_bytes({{part[2]}}, __format__)
+            end
+
         {% elsif part[0] == "enum" %}
           %value = io.read_bytes({{part[2]}}, __format__).to_i
           @{{part[1]}} = {{part[6]}}.from_value(%value)
@@ -172,7 +180,7 @@ class BinData
             io.write_bytes(@{{part[1]}}, __format__)
           {% end %}
 
-        {% elsif part[0] == "array" %}
+        {% elsif part[0] == "array" || part[0] == "variable_array" %}
           @{{part[1]}}.each do |part|
             io.write_bytes(part, __format__)
           end
@@ -321,6 +329,11 @@ class BinData
 
   macro array(name, length, onlyif = nil, value = nil)
     {% PARTS << {"array", name.var, name.type, onlyif, length, value, nil} %}
+    property {{name.var}} : Array({{name.type}}) = {% if name.value %} {{name.value}} {% else %} [] of {{name.type}} {% end %}
+  end
+
+  macro variable_array(name, read_next, onlyif = nil, value = nil)
+    {% PARTS << {"variable_array", name.var, name.type, onlyif, read_next, value, nil} %}
     property {{name.var}} : Array({{name.type}}) = {% if name.value %} {{name.value}} {% else %} [] of {{name.type}} {% end %}
   end
 
