@@ -96,7 +96,7 @@ class BinData
             @{{part[1]}} = [] of {{part[2]}}
             loop do
               # Stop if the callback indicates there is no more
-              break unless ({{part[4]}}).call(@{{part[1]}})
+              break unless ({{part[4]}}).call
               @{{part[1]}} << io.read_bytes({{part[2]}}, __format__)
             end
 

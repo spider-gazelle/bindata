@@ -77,10 +77,10 @@ class VariableArrayData < BinData
   endian big
 
   uint8 :total_size
-  variable_array test : UInt8, read_next: ->(array_so_far : Array(UInt8)) {
+  variable_array test : UInt8, read_next: ->{
     # Will continue reading data into the array until
     #  the array size + 2 buffer bytes equals the total size
-    (array_so_far.size + 2) < total_size
+    (test.size + 2) < total_size
   }
   uint8 :afterdata, default: 1
 end
