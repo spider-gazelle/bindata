@@ -93,6 +93,8 @@ The object above can then be accessed like any other object
   pack.extended.start # => 255
 ```
 
+Inheritance is also supported
+
 
 ## ASN.1 Helpers
 

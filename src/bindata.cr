@@ -1,16 +1,26 @@
-class BinData
+abstract class BinData
+  INDEX     = [-1]
+  BIT_PARTS = [] of Nil
+
   macro inherited
     PARTS = [] of Nil
-    INDEX = [-1]
-    BIT_PARTS = [] of Nil
     ENDIAN = ["system"]
+    KLASS_NAME = [{{@type.name.id}}]
+
+    def self.bit_fields
+      {{@type.ancestors[0].id}}.bit_fields.merge(@@bit_fields)
+    end
 
     macro finished
       __build_methods__
     end
   end
 
-  @@bit_fields = [] of BitField
+  @@bit_fields = {} of String => BitField
+
+  def self.bit_fields
+    @@bit_fields
+  end
 
   def __format__ : IO::ByteFormat
     IO::ByteFormat::SystemEndian
@@ -129,7 +139,7 @@ class BinData
           {% end %}
 
         {% elsif part[0] == "bitfield" %}
-          %bitfield = @@bit_fields[{{part[1]}}]
+          %bitfield = self.class.bit_fields["{{part[2]}}_{{part[1]}}"]
           %bitfield.read(io, __format__)
 
           # Apply the values (with their correct type)
@@ -204,16 +214,17 @@ class BinData
 
         {% elsif part[0] == "bitfield" %}
           # Apply any values
+          %bitfield = self.class.bit_fields["{{part[2]}}_{{part[1]}}"]
           {% for name, value in BIT_PARTS[part[1]] %}
             {% if value[1] %}
               %value = ({{value[1]}}).call
               @{{name}} = %value || @{{name}}
             {% end %}
 
-            @@bit_fields[{{part[1]}}][{{name.id.stringify}}] = @{{name}}.not_nil!
+            %bitfield[{{name.id.stringify}}] = @{{name}}.not_nil!
           {% end %}
 
-          @@bit_fields[{{part[1]}}].write(io, __format__)
+          %bitfield.write(io, __format__)
         {% end %}
 
         {% if part[3] %}
@@ -253,7 +264,7 @@ class BinData
   end
 
   macro bits(size, name, value = nil, default = nil)
-    %field = @@bit_fields[{{INDEX[0]}}]
+    %field = @@bit_fields["{{KLASS_NAME[0]}}_{{INDEX[0]}}"]
     %field.bits({{size}}, {{name.id.stringify}})
 
     {% if size <= 8 %}
@@ -307,14 +318,14 @@ class BinData
   end
 
   macro bit_field(onlyif = nil, &block)
-    @@bit_fields << BitField.new
     {% INDEX[0] = INDEX[0] + 1 %}
     {% BIT_PARTS << {} of Nil => Nil %}
+    %bitfield = @@bit_fields["{{KLASS_NAME[0]}}_{{INDEX[0]}}"] = BitField.new
 
     {{block.body}}
 
-    @@bit_fields[{{INDEX[0]}}].apply
-    {% PARTS << {"bitfield", INDEX[0], nil, onlyif, nil, nil} %}
+    %bitfield.apply
+    {% PARTS << {"bitfield", INDEX[0], KLASS_NAME[0], onlyif, nil, nil} %}
   end
 
   macro custom(name, onlyif = nil, value = nil)
