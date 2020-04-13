@@ -64,6 +64,33 @@ class EnumData < BinData
   uint8 :end, value: ->{ 0_u8 }
 end
 
+class Inherited < EnumData
+  endian big
+
+  bit_field do
+    bits 4, :other_high
+    bits 4, :other_low
+  end
+end
+
+class Aligned < BinData
+  endian big
+
+  bit_field do
+    bits 8, :other, default: 1_u8
+  end
+end
+
+class ByteSized < BinData
+  endian big
+
+  bit_field do
+    bits 1, :header
+    bits 8, :other, default: 1_u8
+    bits 7, :footer
+  end
+end
+
 class ArrayData < BinData
   endian big
 

@@ -175,7 +175,8 @@ class BinData::BitField
       end
 
       # Align the first bit with the start of the byte
-      shift(buffer, 8 - (size % 8), start_byte)
+      shift_size = 8 - (size % 8)
+      shift(buffer, shift_size, start_byte) unless shift_size == 8
 
       # We need to shift the bytes into the previous byte
       if offset != 0

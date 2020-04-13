@@ -64,4 +64,18 @@ describe BinData::BitField do
 
     io2.to_slice.should eq(io.to_slice)
   end
+
+  it "should write an aligned object to an IO" do
+    io2 = IO::Memory.new
+    b = Aligned.new
+    b.write(io2)
+    io2.to_slice.should eq(Bytes[0x01])
+  end
+
+  it "should write an object with a byte sized field to an IO" do
+    io2 = IO::Memory.new
+    b = ByteSized.new
+    b.write(io2)
+    io2.to_slice.should eq(Bytes[0x00, 0x80])
+  end
 end
