@@ -42,7 +42,7 @@ describe BinData do
     io.write_byte 0xFF
     io.rewind
 
-    expect_raises BinDataVerificationException, "Failed to verify reading basic at VerifyData.checksum" do
+    expect_raises BinData::VerificationException, "Failed to verify reading basic at VerifyData.checksum" do
       r = io.read_bytes VerifyData
     end
   end
@@ -59,7 +59,7 @@ describe BinData do
     r.bytes[0] = 0x0F
     io2 = IO::Memory.new
 
-    expect_raises BinDataVerificationException, "Failed to verify writing basic at VerifyData.checksum" do
+    expect_raises BinData::VerificationException, "Failed to verify writing basic at VerifyData.checksum" do
       r.write io2
     end
   end

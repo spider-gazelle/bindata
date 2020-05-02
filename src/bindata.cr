@@ -1,7 +1,7 @@
-class BinDataVerificationException < Exception
-end
-
 abstract class BinData
+  class VerificationException < Exception
+  end
+
   INDEX     = [-1]
   BIT_PARTS = [] of Nil
 
@@ -158,7 +158,7 @@ abstract class BinData
 
         {% if part[4] %}
           if !({{part[4]}}).call
-            raise BinDataVerificationException.new "Failed to verify reading #{{{part[0]}}} at {{@type}}.{{part[1]}}"
+            raise VerificationException.new "Failed to verify reading #{{{part[0]}}} at {{@type}}.{{part[1]}}"
           end
         {% end %}
       {% end %}
@@ -242,7 +242,7 @@ abstract class BinData
 
         {% if part[4] %}
           if !({{part[4]}}).call
-            raise BinDataVerificationException.new "Failed to verify writing #{{{part[0]}}} at {{@type}}.{{part[1]}}"
+            raise VerificationException.new "Failed to verify writing #{{{part[0]}}} at {{@type}}.{{part[1]}}"
           end
         {% end %}
       {% end %}
