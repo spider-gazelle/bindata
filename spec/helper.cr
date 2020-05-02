@@ -111,3 +111,11 @@ class VariableArrayData < BinData
   }
   uint8 :afterdata, default: 1
 end
+
+class VerifyData < BinData
+  endian big
+
+  uint8 :size
+  bytes :bytes, length: ->{ size }
+  uint8 :checksum, verify: ->{ checksum == bytes.reduce(0) { |acc, i| acc + i } }
+end
