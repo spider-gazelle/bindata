@@ -93,6 +93,24 @@ The object above can then be accessed like any other object
   pack.extended.start # => 255
 ```
 
+Additionally, BinData fields support a `verify` proc, which allows data to be verified while reading and writing io.
+
+```crystal
+class VerifyData < BinData
+  endian big
+
+  uint8 :size
+  bytes :bytes, length: ->{ size }
+  uint8 :checksum, verify: ->{ checksum == bytes.reduce(0) { |acc, i| acc + i } }
+end
+```
+
+If the `verify` proc returns `false`, a `BinData::VerificationException` is raised with a message matching the following format.
+
+```
+Failed to verify reading basic at VerifyData.checksum
+```
+
 Inheritance is also supported
 
 

@@ -1,4 +1,7 @@
 abstract class BinData
+  class VerificationException < Exception
+  end
+
   INDEX     = [-1]
   BIT_PARTS = [] of Nil
 
@@ -96,7 +99,7 @@ abstract class BinData
           {% end %}
 
         {% elsif part[0] == "array" %}
-          %size = ({{part[4]}}).call.not_nil!
+          %size = ({{part[5]}}).call.not_nil!
           @{{part[1]}} = [] of {{part[2]}}
           (0...%size).each do
             @{{part[1]}} << io.read_bytes({{part[2]}}, __format__)
@@ -106,13 +109,13 @@ abstract class BinData
             @{{part[1]}} = [] of {{part[2]}}
             loop do
               # Stop if the callback indicates there is no more
-              break unless ({{part[4]}}).call
+              break unless ({{part[5]}}).call
               @{{part[1]}} << io.read_bytes({{part[2]}}, __format__)
             end
 
         {% elsif part[0] == "enum" %}
           %value = io.read_bytes({{part[2]}}, __format__).to_i
-          @{{part[1]}} = {{part[6]}}.from_value(%value)
+          @{{part[1]}} = {{part[7]}}.from_value(%value)
 
         {% elsif part[0] == "group" %}
           @{{part[1]}} = {{part[2]}}.new
@@ -121,15 +124,15 @@ abstract class BinData
 
         {% elsif part[0] == "bytes" %}
           # There is a length calculation
-          %size = ({{part[4]}}).call.not_nil!
+          %size = ({{part[5]}}).call.not_nil!
           %buf = Bytes.new(%size)
           io.read_fully(%buf)
           @{{part[1]}} = %buf
 
         {% elsif part[0] == "string" %}
-          {% if part[4] %}
+          {% if part[5] %}
             # There is a length calculation
-            %size = ({{part[4]}}).call.not_nil!
+            %size = ({{part[5]}}).call.not_nil!
             %buf = Bytes.new(%size)
             io.read_fully(%buf)
             @{{part[1]}} = String.new(%buf)
@@ -152,6 +155,12 @@ abstract class BinData
         {% if part[3] %}
           end
         {% end %}
+
+        {% if part[4] %}
+          if !({{part[4]}}).call
+            raise VerificationException.new "Failed to verify reading #{{{part[0]}}} at {{@type}}.{{part[1]}}"
+          end
+        {% end %}
       {% end %}
 
       io
@@ -167,9 +176,9 @@ abstract class BinData
           if %onlyif
         {% end %}
 
-        {% if part[5] %}
+        {% if part[6] %}
           # check if we need to configure the value
-          %value = ({{part[5]}}).call
+          %value = ({{part[6]}}).call
           # This ensures numbers are cooerced to the correct type
           if %value.is_a?(Number)
             @{{part[1]}} = {{part[2]}}.new(0) | %value
@@ -208,7 +217,7 @@ abstract class BinData
 
         {% elsif part[0] == "string" %}
           io.write(@{{part[1]}}.to_slice)
-          {% if !part[4] %}
+          {% if !part[5] %}
             io.write_byte(0_u8)
           {% end %}
 
@@ -230,6 +239,12 @@ abstract class BinData
         {% if part[3] %}
           end
         {% end %}
+
+        {% if part[4] %}
+          if !({{part[4]}}).call
+            raise VerificationException.new "Failed to verify writing #{{{part[0]}}} at {{@type}}.{{part[1]}}"
+          end
+        {% end %}
       {% end %}
 
       io
@@ -241,25 +256,26 @@ abstract class BinData
   # 1: var_name
   # 2: class
   # 3: if_proc
-  # 4: length
-  # 5: value
-  # 6: encoding
+  # 4: verify
+  # 5: length
+  # 6: value
+  # 7: encoding
   {% for vartype in ["UInt8", "Int8", "UInt16", "Int16", "UInt32", "Int32", "UInt64", "Int64", "UInt128", "Int128", "Float32", "Float64"] %}
     {% name = vartype.downcase.id %}
 
-    macro {{name}}(name, onlyif = nil, value = nil, default = nil)
-      \{% PARTS << {"basic", name.id, {{vartype.id}}, onlyif, nil, value} %}
+    macro {{name}}(name, onlyif = nil, verify = nil, value = nil, default = nil)
+      \{% PARTS << {"basic", name.id, {{vartype.id}}, onlyif, verify, nil, value, nil} %}
       property \{{name.id}} : {{vartype.id}} = \{% if default %} {{vartype.id}}.new(\{{default}}) \{% else %} 0 \{% end %}
     end
   {% end %}
 
-  macro string(name, onlyif = nil, length = nil, value = nil, encoding = nil, default = nil)
-    {% PARTS << {"string", name.id, "String".id, onlyif, length, value, encoding} %}
+  macro string(name, onlyif = nil, verify = nil, length = nil, value = nil, encoding = nil, default = nil)
+    {% PARTS << {"string", name.id, "String".id, onlyif, verify, length, value, encoding} %}
     property {{name.id}} : String = {% if default %} {{default}}.to_s {% else %} "" {% end %}
   end
 
-  macro bytes(name, length, onlyif = nil, value = nil, default = nil)
-    {% PARTS << {"bytes", name.id, "Bytes".id, onlyif, length, value, nil} %}
+  macro bytes(name, length, onlyif = nil, verify = nil, value = nil, default = nil)
+    {% PARTS << {"bytes", name.id, "Bytes".id, onlyif, verify, length, value, nil} %}
     property {{name.id}} : Bytes = {% if default %} {{default}}.to_slice {% else %} Bytes.new(0) {% end %}
   end
 
@@ -317,7 +333,7 @@ abstract class BinData
     end
   end
 
-  macro bit_field(onlyif = nil, &block)
+  macro bit_field(onlyif = nil, verify = nil, &block)
     {% INDEX[0] = INDEX[0] + 1 %}
     {% BIT_PARTS << {} of Nil => Nil %}
     %bitfield = @@bit_fields["{{KLASS_NAME[0]}}_{{INDEX[0]}}"] = BitField.new
@@ -325,31 +341,31 @@ abstract class BinData
     {{block.body}}
 
     %bitfield.apply
-    {% PARTS << {"bitfield", INDEX[0], KLASS_NAME[0], onlyif, nil, nil} %}
+    {% PARTS << {"bitfield", INDEX[0], KLASS_NAME[0], onlyif, verify, nil, nil} %}
   end
 
-  macro custom(name, onlyif = nil, value = nil)
-    {% PARTS << {"basic", name.var, name.type, onlyif, nil, value, nil} %}
+  macro custom(name, onlyif = nil, verify = nil, value = nil)
+    {% PARTS << {"basic", name.var, name.type, onlyif, verify, nil, value, nil} %}
     property {{name.id}}
   end
 
-  macro enum_field(size, name, onlyif = nil, value = nil)
-    {% PARTS << {"enum", name.var, size, onlyif, nil, value, name.type} %}
+  macro enum_field(size, name, onlyif = nil, verify = nil, value = nil)
+    {% PARTS << {"enum", name.var, size, onlyif, verify, nil, value, name.type} %}
     property {{name.id}}
   end
 
-  macro array(name, length, onlyif = nil, value = nil)
-    {% PARTS << {"array", name.var, name.type, onlyif, length, value, nil} %}
+  macro array(name, length, onlyif = nil, verify = nil, value = nil)
+    {% PARTS << {"array", name.var, name.type, onlyif, verify, length, value, nil} %}
     property {{name.var}} : Array({{name.type}}) = {% if name.value %} {{name.value}} {% else %} [] of {{name.type}} {% end %}
   end
 
-  macro variable_array(name, read_next, onlyif = nil, value = nil)
-    {% PARTS << {"variable_array", name.var, name.type, onlyif, read_next, value, nil} %}
+  macro variable_array(name, read_next, onlyif = nil, verify = nil, value = nil)
+    {% PARTS << {"variable_array", name.var, name.type, onlyif, verify, read_next, value, nil} %}
     property {{name.var}} : Array({{name.type}}) = {% if name.value %} {{name.value}} {% else %} [] of {{name.type}} {% end %}
   end
 
   # }# Encapsulates a bunch of fields by creating a nested BinData class
-  macro group(name, onlyif = nil, value = nil, &block)
+  macro group(name, onlyif = nil, verify = nil, value = nil, &block)
     class {{name.id.stringify.camelcase.id}} < BinData
       endian({{ENDIAN[0]}})
 
@@ -364,7 +380,7 @@ abstract class BinData
 
     property {{name.id}} = {{name.id.stringify.camelcase.id}}.new
 
-    {% PARTS << {"group", name.id, name.id.stringify.camelcase.id, onlyif, nil, value, nil} %}
+    {% PARTS << {"group", name.id, name.id.stringify.camelcase.id, onlyif, verify, nil, value, nil} %}
   end
 end
 
