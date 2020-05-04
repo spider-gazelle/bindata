@@ -9,6 +9,7 @@ abstract class BinData
     PARTS = [] of Nil
     ENDIAN = ["system"]
     KLASS_NAME = [{{@type.name.id}}]
+    REMAINING = [] of Nil
 
     def self.bit_fields
       {{@type.ancestors[0].id}}.bit_fields.merge(@@bit_fields)
@@ -159,6 +160,24 @@ abstract class BinData
         {% if part[4] %}
           if !({{part[4]}}).call
             raise VerificationException.new "Failed to verify reading #{{{part[0]}}} at {{@type}}.{{part[1]}}"
+          end
+        {% end %}
+      {% end %}
+
+      {% if REMAINING.size > 0 %}
+        {% if REMAINING[0][2] %}
+          %onlyif = ({{REMAINING[0][2]}}).call
+          if %onlyif
+        {% end %}
+        %buf = Bytes.new io.size - io.pos
+        io.read_fully %buf
+        @{{REMAINING[0][1]}} = %buf
+        {% if REMAINING[0][2] %}
+          end
+        {% end %}
+        {% if REMAINING[0][3] %}
+          if !({{REMAINING[0][3]}}).call
+            raise VerificationException.new "Failed to verify reading #{{{REMAINING[0][0]}}} at {{@type}}.{{REMAINING[0][1]}}"
           end
         {% end %}
       {% end %}
@@ -381,6 +400,11 @@ abstract class BinData
     property {{name.id}} = {{name.id.stringify.camelcase.id}}.new
 
     {% PARTS << {"group", name.id, name.id.stringify.camelcase.id, onlyif, verify, nil, value, nil} %}
+  end
+
+  macro remaining_bytes(name, onlyif = nil, verify = nil, value = nil, default = nil)
+    {% REMAINING << {"bytes", name.id, onlyif, verify} %}
+    property {{name.id}} : Bytes = {% if default %} {{default}}.to_slice {% else %} Bytes.new(0) {% end %}
   end
 end
 

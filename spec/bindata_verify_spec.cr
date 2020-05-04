@@ -34,7 +34,7 @@ describe BinData do
     io2.to_slice.should eq io.to_slice
   end
 
-  it "raised an exception when it fails to verify on read" do
+  it "raises an exception when it fails to verify on read" do
     io = IO::Memory.new
     io.write_byte 0x02
     io.write_byte 0x05
@@ -43,11 +43,11 @@ describe BinData do
     io.rewind
 
     expect_raises BinData::VerificationException, "Failed to verify reading basic at VerifyData.checksum" do
-      r = io.read_bytes VerifyData
+      io.read_bytes VerifyData
     end
   end
 
-  it "raised an exception when it fails to verify on write" do
+  it "raises an exception when it fails to verify on write" do
     io = IO::Memory.new
     io.write_byte 0x02
     io.write_byte 0x05
