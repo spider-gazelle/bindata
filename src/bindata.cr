@@ -165,19 +165,19 @@ abstract class BinData
       {% end %}
 
       {% if REMAINING.size > 0 %}
-        {% if REMAINING[0][2] %}
-          %onlyif = ({{REMAINING[0][2]}}).call
+        {% if REMAINING[0][:onlyif] %}
+          %onlyif = ({{REMAINING[0][:onlyif]}}).call
           if %onlyif
         {% end %}
         %buf = Bytes.new io.size - io.pos
         io.read_fully %buf
-        @{{REMAINING[0][1]}} = %buf
-        {% if REMAINING[0][2] %}
+        @{{REMAINING[0][:name]}} = %buf
+        {% if REMAINING[0][:onlyif] %}
           end
         {% end %}
-        {% if REMAINING[0][3] %}
-          if !({{REMAINING[0][3]}}).call
-            raise VerificationException.new "Failed to verify reading #{{{REMAINING[0][0]}}} at {{@type}}.{{REMAINING[0][1]}}"
+        {% if REMAINING[0][:verify] %}
+          if !({{REMAINING[0][:verify]}}).call
+            raise VerificationException.new "Failed to verify reading #{{{REMAINING[0][:type]}}} at {{@type}}.{{REMAINING[0][:name]}}"
           end
         {% end %}
       {% end %}
@@ -402,8 +402,8 @@ abstract class BinData
     {% PARTS << {"group", name.id, name.id.stringify.camelcase.id, onlyif, verify, nil, value, nil} %}
   end
 
-  macro remaining_bytes(name, onlyif = nil, verify = nil, value = nil, default = nil)
-    {% REMAINING << {"bytes", name.id, onlyif, verify} %}
+  macro remaining_bytes(name, onlyif = nil, verify = nil, default = nil)
+    {% REMAINING << {type: "bytes", name: name.id, onlyif: onlyif, verify: verify} %}
     property {{name.id}} : Bytes = {% if default %} {{default}}.to_slice {% else %} Bytes.new(0) {% end %}
   end
 end
