@@ -84,82 +84,82 @@ abstract class BinData
       super(io)
 
       {% for part in PARTS %}
-        {% if part[3] %}
-          %onlyif = ({{part[3]}}).call
+        {% if part[:onlyif] %}
+          %onlyif = ({{part[:onlyif]}}).call
           if %onlyif
         {% end %}
 
-        {% if part[0] == "basic" %}
-          {% part_type = part[2].resolve %}
+        {% if part[:type] == "basic" %}
+          {% part_type = part[:cls].resolve %}
           {% if part_type.is_a?(Union) %}
-            @{{part[1]}} = io.read_bytes({{part_type.types.reject { |pt| pt.nilable? }[0]}}, __format__)
+            @{{part[:name]}} = io.read_bytes({{part_type.types.reject { |pt| pt.nilable? }[0]}}, __format__)
           {% elsif part_type.union? %}
-            @{{part[1]}} = io.read_bytes({{part_type.union_types.reject { |pt| pt.nilable? }[0]}}, __format__)
+            @{{part[:name]}} = io.read_bytes({{part_type.union_types.reject { |pt| pt.nilable? }[0]}}, __format__)
           {% else %}
-            @{{part[1]}} = io.read_bytes({{part[2]}}, __format__)
+            @{{part[:name]}} = io.read_bytes({{part[:cls]}}, __format__)
           {% end %}
 
-        {% elsif part[0] == "array" %}
-          %size = ({{part[5]}}).call.not_nil!
-          @{{part[1]}} = [] of {{part[2]}}
+        {% elsif part[:type] == "array" %}
+          %size = ({{part[:length]}}).call.not_nil!
+          @{{part[:name]}} = [] of {{part[:cls]}}
           (0...%size).each do
-            @{{part[1]}} << io.read_bytes({{part[2]}}, __format__)
+            @{{part[:name]}} << io.read_bytes({{part[:cls]}}, __format__)
           end
 
-        {% elsif part[0] == "variable_array" %}
-            @{{part[1]}} = [] of {{part[2]}}
+        {% elsif part[:type] == "variable_array" %}
+            @{{part[:name]}} = [] of {{part[:cls]}}
             loop do
               # Stop if the callback indicates there is no more
-              break unless ({{part[5]}}).call
-              @{{part[1]}} << io.read_bytes({{part[2]}}, __format__)
+              break unless ({{part[:length]}}).call
+              @{{part[:name]}} << io.read_bytes({{part[:cls]}}, __format__)
             end
 
-        {% elsif part[0] == "enum" %}
-          %value = io.read_bytes({{part[2]}}, __format__).to_i
-          @{{part[1]}} = {{part[7]}}.from_value(%value)
+        {% elsif part[:type] == "enum" %}
+          %value = io.read_bytes({{part[:cls]}}, __format__).to_i
+          @{{part[:name]}} = {{part[:encoding]}}.from_value(%value)
 
-        {% elsif part[0] == "group" %}
-          @{{part[1]}} = {{part[2]}}.new
-          @{{part[1]}}.parent = self
-          @{{part[1]}}.read(io)
+        {% elsif part[:type] == "group" %}
+          @{{part[:name]}} = {{part[:cls]}}.new
+          @{{part[:name]}}.parent = self
+          @{{part[:name]}}.read(io)
 
-        {% elsif part[0] == "bytes" %}
+        {% elsif part[:type] == "bytes" %}
           # There is a length calculation
-          %size = ({{part[5]}}).call.not_nil!
+          %size = ({{part[:length]}}).call.not_nil!
           %buf = Bytes.new(%size)
           io.read_fully(%buf)
-          @{{part[1]}} = %buf
+          @{{part[:name]}} = %buf
 
-        {% elsif part[0] == "string" %}
-          {% if part[5] %}
+        {% elsif part[:type] == "string" %}
+          {% if part[:length] %}
             # There is a length calculation
-            %size = ({{part[5]}}).call.not_nil!
+            %size = ({{part[:length]}}).call.not_nil!
             %buf = Bytes.new(%size)
             io.read_fully(%buf)
-            @{{part[1]}} = String.new(%buf)
+            @{{part[:name]}} = String.new(%buf)
           {% else %}
             # Assume the string is 0 terminated
-            @{{part[1]}} = (io.gets('\0') || "")[0..-2]
+            @{{part[:name]}} = (io.gets('\0') || "")[0..-2]
           {% end %}
 
-        {% elsif part[0] == "bitfield" %}
-          %bitfield = self.class.bit_fields["{{part[2]}}_{{part[1]}}"]
+        {% elsif part[:type] == "bitfield" %}
+          %bitfield = self.class.bit_fields["{{part[:cls]}}_{{part[:name]}}"]
           %bitfield.read(io, __format__)
 
           # Apply the values (with their correct type)
-          {% for name, value in BIT_PARTS[part[1]] %}
+          {% for name, value in BIT_PARTS[part[:name]] %}
             %value = %bitfield[{{name.id.stringify}}]
             @{{name}} = %value.as({{value[0]}})
           {% end %}
         {% end %}
 
-        {% if part[3] %}
+        {% if part[:onlyif] %}
           end
         {% end %}
 
-        {% if part[4] %}
-          if !({{part[4]}}).call
-            raise VerificationException.new "Failed to verify reading #{{{part[0]}}} at {{@type}}.{{part[1]}}"
+        {% if part[:verify] %}
+          if !({{part[:verify]}}).call
+            raise VerificationException.new "Failed to verify reading #{{{part[:type]}}} at {{@type}}.{{part[:name]}}"
           end
         {% end %}
       {% end %}
@@ -190,60 +190,60 @@ abstract class BinData
       super(io)
 
       {% for part in PARTS %}
-        {% if part[3] %}
-          %onlyif = ({{part[3]}}).call
+        {% if part[:onlyif] %}
+          %onlyif = ({{part[:onlyif]}}).call
           if %onlyif
         {% end %}
 
-        {% if part[6] %}
+        {% if part[:value] %}
           # check if we need to configure the value
-          %value = ({{part[6]}}).call
+          %value = ({{part[:value]}}).call
           # This ensures numbers are cooerced to the correct type
           if %value.is_a?(Number)
-            @{{part[1]}} = {{part[2]}}.new(0) | %value
+            @{{part[:name]}} = {{part[:cls]}}.new(0) | %value
           else
-            @{{part[1]}} = %value || @{{part[1]}}
+            @{{part[:name]}} = %value || @{{part[:name]}}
           end
         {% end %}
 
-        {% if part[0] == "basic" %}
-          {% part_type = part[2].resolve %}
+        {% if part[:type] == "basic" %}
+          {% part_type = part[:cls].resolve %}
           {% if part_type.is_a?(Union) || part_type.union? %}
-            if __temp_{{part[1]}} = @{{part[1]}}
-              io.write_bytes(__temp_{{part[1]}}, __format__)
+            if __temp_{{part[:name]}} = @{{part[:name]}}
+              io.write_bytes(__temp_{{part[:name]}}, __format__)
             else
-              raise NilAssertionError.new("unable to write nil value for #{self.class}##{{{part[1].stringify}}}")
+              raise NilAssertionError.new("unable to write nil value for #{self.class}##{{{part[:name].stringify}}}")
             end
           {% else %}
-            io.write_bytes(@{{part[1]}}, __format__)
+            io.write_bytes(@{{part[:name]}}, __format__)
           {% end %}
 
-        {% elsif part[0] == "array" || part[0] == "variable_array" %}
-          @{{part[1]}}.each do |part|
+        {% elsif part[:type] == "array" || part[:type] == "variable_array" %}
+          @{{part[:name]}}.each do |part|
             io.write_bytes(part, __format__)
           end
 
-        {% elsif part[0] == "enum" %}
-          %value = {{part[2]}}.new(@{{part[1]}}.to_i)
+        {% elsif part[:type] == "enum" %}
+          %value = {{part[:cls]}}.new(@{{part[:name]}}.to_i)
           io.write_bytes(%value, __format__)
 
-        {% elsif part[0] == "group" %}
-          @{{part[1]}}.parent = self
-          io.write_bytes(@{{part[1]}}, __format__)
+        {% elsif part[:type] == "group" %}
+          @{{part[:name]}}.parent = self
+          io.write_bytes(@{{part[:name]}}, __format__)
 
-        {% elsif part[0] == "bytes" %}
-          io.write(@{{part[1]}})
+        {% elsif part[:type] == "bytes" %}
+          io.write(@{{part[:name]}})
 
-        {% elsif part[0] == "string" %}
-          io.write(@{{part[1]}}.to_slice)
-          {% if !part[5] %}
+        {% elsif part[:type] == "string" %}
+          io.write(@{{part[:name]}}.to_slice)
+          {% if !part[:length] %}
             io.write_byte(0_u8)
           {% end %}
 
-        {% elsif part[0] == "bitfield" %}
+        {% elsif part[:type] == "bitfield" %}
           # Apply any values
-          %bitfield = self.class.bit_fields["{{part[2]}}_{{part[1]}}"]
-          {% for name, value in BIT_PARTS[part[1]] %}
+          %bitfield = self.class.bit_fields["{{part[:cls]}}_{{part[:name]}}"]
+          {% for name, value in BIT_PARTS[part[:name]] %}
             {% if value[1] %}
               %value = ({{value[1]}}).call
               @{{name}} = %value || @{{name}}
@@ -255,13 +255,13 @@ abstract class BinData
           %bitfield.write(io, __format__)
         {% end %}
 
-        {% if part[3] %}
+        {% if part[:onlyif] %}
           end
         {% end %}
 
-        {% if part[4] %}
-          if !({{part[4]}}).call
-            raise VerificationException.new "Failed to verify writing #{{{part[0]}}} at {{@type}}.{{part[1]}}"
+        {% if part[:verify] %}
+          if !({{part[:verify]}}).call
+            raise VerificationException.new "Failed to verify writing #{{{part[:type]}}} at {{@type}}.{{part[:name]}}"
           end
         {% end %}
       {% end %}
@@ -299,18 +299,18 @@ abstract class BinData
     {% name = vartype.downcase.id %}
 
     macro {{name}}(name, onlyif = nil, verify = nil, value = nil, default = nil)
-      \{% PARTS << {"basic", name.id, {{vartype.id}}, onlyif, verify, nil, value, nil} %}
+      \{% PARTS << {type: "basic", name: name.id, cls: {{vartype.id}}, onlyif: onlyif, verify: verify, value: value} %}
       property \{{name.id}} : {{vartype.id}} = \{% if default %} {{vartype.id}}.new(\{{default}}) \{% else %} 0 \{% end %}
     end
   {% end %}
 
   macro string(name, onlyif = nil, verify = nil, length = nil, value = nil, encoding = nil, default = nil)
-    {% PARTS << {"string", name.id, "String".id, onlyif, verify, length, value, encoding} %}
+    {% PARTS << {type: "string", name: name.id, cls: "String".id, onlyif: onlyif, verify: verify, length: length, value: value, encoding: encoding} %}
     property {{name.id}} : String = {% if default %} {{default}}.to_s {% else %} "" {% end %}
   end
 
   macro bytes(name, length, onlyif = nil, verify = nil, value = nil, default = nil)
-    {% PARTS << {"bytes", name.id, "Bytes".id, onlyif, verify, length, value, nil} %}
+    {% PARTS << {type: "bytes", name: name.id, cls: "Bytes".id, onlyif: onlyif, verify: verify, length: length, value: value} %}
     property {{name.id}} : Bytes = {% if default %} {{default}}.to_slice {% else %} Bytes.new(0) {% end %}
   end
 
@@ -376,26 +376,26 @@ abstract class BinData
     {{block.body}}
 
     %bitfield.apply
-    {% PARTS << {"bitfield", INDEX[0], KLASS_NAME[0], onlyif, verify, nil, nil} %}
+    {% PARTS << {type: "bitfield", name: INDEX[0], cls: KLASS_NAME[0], onlyif: onlyif, verify: verify} %}
   end
 
   macro custom(name, onlyif = nil, verify = nil, value = nil)
-    {% PARTS << {"basic", name.var, name.type, onlyif, verify, nil, value, nil} %}
+    {% PARTS << {type: "basic", name: name.var, cls: name.type, onlyif: onlyif, verify: verify, value: value} %}
     property {{name.id}}
   end
 
   macro enum_field(size, name, onlyif = nil, verify = nil, value = nil)
-    {% PARTS << {"enum", name.var, size, onlyif, verify, nil, value, name.type} %}
+    {% PARTS << {type: "enum", name: name.var, cls: size, onlyif: onlyif, verify: verify, value: value, encoding: name.type} %}
     property {{name.id}}
   end
 
   macro array(name, length, onlyif = nil, verify = nil, value = nil)
-    {% PARTS << {"array", name.var, name.type, onlyif, verify, length, value, nil} %}
+    {% PARTS << {type: "array", name: name.var, cls: name.type, onlyif: onlyif, verify: verify, length: length, value: value} %}
     property {{name.var}} : Array({{name.type}}) = {% if name.value %} {{name.value}} {% else %} [] of {{name.type}} {% end %}
   end
 
   macro variable_array(name, read_next, onlyif = nil, verify = nil, value = nil)
-    {% PARTS << {"variable_array", name.var, name.type, onlyif, verify, read_next, value, nil} %}
+    {% PARTS << {type: "variable_array", name: name.var, cls: name.type, onlyif: onlyif, verify: verify, length: read_next, value: value} %}
     property {{name.var}} : Array({{name.type}}) = {% if name.value %} {{name.value}} {% else %} [] of {{name.type}} {% end %}
   end
 
@@ -415,7 +415,7 @@ abstract class BinData
 
     property {{name.id}} = {{name.id.stringify.camelcase.id}}.new
 
-    {% PARTS << {"group", name.id, name.id.stringify.camelcase.id, onlyif, verify, nil, value, nil} %}
+    {% PARTS << {type: "group", name: name.id, cls: name.id.stringify.camelcase.id, onlyif: onlyif, verify: verify, value: value} %}
   end
 
   macro remaining_bytes(name, onlyif = nil, verify = nil, default = nil)
