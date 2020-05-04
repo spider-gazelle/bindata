@@ -79,6 +79,9 @@ see the [spec helper](https://github.com/spider-gazelle/bindata/blob/master/spec
       # Supports custom objects as long as they implement `from_io`
       custom header : ExtHeader = ExtHeader.new
     end
+
+    # optionally read the remaining bytes out of io
+    remaining_bytes :rest
   end
 ```
 

@@ -9,6 +9,7 @@ abstract class BinData
     PARTS = [] of Nil
     ENDIAN = ["system"]
     KLASS_NAME = [{{@type.name.id}}]
+    REMAINING = [] of Nil
 
     def self.bit_fields
       {{@type.ancestors[0].id}}.bit_fields.merge(@@bit_fields)
@@ -163,6 +164,24 @@ abstract class BinData
         {% end %}
       {% end %}
 
+      {% if REMAINING.size > 0 %}
+        {% if REMAINING[0][:onlyif] %}
+          %onlyif = ({{REMAINING[0][:onlyif]}}).call
+          if %onlyif
+        {% end %}
+        %buf = Bytes.new io.size - io.pos
+        io.read_fully %buf
+        @{{REMAINING[0][:name]}} = %buf
+        {% if REMAINING[0][:onlyif] %}
+          end
+        {% end %}
+        {% if REMAINING[0][:verify] %}
+          if !({{REMAINING[0][:verify]}}).call
+            raise VerificationException.new "Failed to verify reading #{{{REMAINING[0][:type]}}} at {{@type}}.{{REMAINING[0][:name]}}"
+          end
+        {% end %}
+      {% end %}
+
       io
     end
 
@@ -243,6 +262,22 @@ abstract class BinData
         {% if part[4] %}
           if !({{part[4]}}).call
             raise VerificationException.new "Failed to verify writing #{{{part[0]}}} at {{@type}}.{{part[1]}}"
+          end
+        {% end %}
+      {% end %}
+
+      {% if REMAINING.size > 0 %}
+        {% if REMAINING[0][:onlyif] %}
+          %onlyif = ({{REMAINING[0][:onlyif]}}).call
+          if %onlyif
+        {% end %}
+        io.write(@{{REMAINING[0][:name]}})
+        {% if REMAINING[0][:onlyif] %}
+          end
+        {% end %}
+        {% if REMAINING[0][:verify] %}
+          if !({{REMAINING[0][:verify]}}).call
+            raise VerificationException.new "Failed to verify writing #{{{REMAINING[0][:type]}}} at {{@type}}.{{REMAINING[0][:name]}}"
           end
         {% end %}
       {% end %}
@@ -381,6 +416,11 @@ abstract class BinData
     property {{name.id}} = {{name.id.stringify.camelcase.id}}.new
 
     {% PARTS << {"group", name.id, name.id.stringify.camelcase.id, onlyif, verify, nil, value, nil} %}
+  end
+
+  macro remaining_bytes(name, onlyif = nil, verify = nil, default = nil)
+    {% REMAINING << {type: "bytes", name: name.id, onlyif: onlyif, verify: verify} %}
+    property {{name.id}} : Bytes = {% if default %} {{default}}.to_slice {% else %} Bytes.new(0) {% end %}
   end
 end
 

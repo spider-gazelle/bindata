@@ -119,3 +119,10 @@ class VerifyData < BinData
   bytes :bytes, length: ->{ size }
   uint8 :checksum, verify: ->{ checksum == bytes.reduce(0) { |acc, i| acc + i } }
 end
+
+class RemainingBytesData < BinData
+  endian big
+
+  uint8 :first
+  remaining_bytes :rest, onlyif: ->{ first == 0x02 }, verify: ->{ rest.size % 2 == 0 }
+end
