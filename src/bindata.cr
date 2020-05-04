@@ -266,6 +266,22 @@ abstract class BinData
         {% end %}
       {% end %}
 
+      {% if REMAINING.size > 0 %}
+        {% if REMAINING[0][:onlyif] %}
+          %onlyif = ({{REMAINING[0][:onlyif]}}).call
+          if %onlyif
+        {% end %}
+        io.write(@{{REMAINING[0][:name]}})
+        {% if REMAINING[0][:onlyif] %}
+          end
+        {% end %}
+        {% if REMAINING[0][:verify] %}
+          if !({{REMAINING[0][:verify]}}).call
+            raise VerificationException.new "Failed to verify writing #{{{REMAINING[0][:type]}}} at {{@type}}.{{REMAINING[0][:name]}}"
+          end
+        {% end %}
+      {% end %}
+
       io
     end
   end

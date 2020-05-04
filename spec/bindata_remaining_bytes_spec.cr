@@ -49,6 +49,17 @@ describe BinData do
     end
   end
 
+  it "runs verification as expected while writing" do
+    r = RemainingBytesData.new
+    r.first = 0x02
+    r.rest = Bytes.new 15
+    io2 = IO::Memory.new
+
+    expect_raises BinData::VerificationException, "Failed to verify writing bytes at RemainingBytesData.rest" do
+      r.write io2
+    end
+  end
+
   it "abides by onlyif as expected" do
     io = IO::Memory.new
     io.write_byte 0x01
@@ -59,5 +70,34 @@ describe BinData do
     r.first.should eq 0x01
     r.rest.size.should eq 0
     io.pos.should eq 1
+  end
+
+  it "abides by onlyif as expected while writing" do
+    r = RemainingBytesData.new
+    r.first = 0x01
+    r.rest = Bytes.new 4
+    io2 = IO::Memory.new
+    r.write io2
+    io2.rewind
+
+    io2.size.should eq 1
+  end
+
+  it "writes remaining bytes" do
+    io = IO::Memory.new
+    io.write_byte 0x02
+    rest = Bytes.new 4, &.to_u8
+    io.write rest
+    io.rewind
+
+    r = RemainingBytesData.new
+    r.first = 0x02
+    r.rest = rest
+
+    io2 = IO::Memory.new
+    r.write io2
+    io2.rewind
+
+    io2.to_slice.should eq(io.to_slice)
   end
 end
