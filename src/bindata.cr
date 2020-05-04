@@ -286,15 +286,6 @@ abstract class BinData
     end
   end
 
-  # PARTS:
-  # 0: parse type
-  # 1: var_name
-  # 2: class
-  # 3: if_proc
-  # 4: verify
-  # 5: length
-  # 6: value
-  # 7: encoding
   {% for vartype in ["UInt8", "Int8", "UInt16", "Int16", "UInt32", "Int32", "UInt64", "Int64", "UInt128", "Int128", "Float32", "Float64"] %}
     {% name = vartype.downcase.id %}
 
