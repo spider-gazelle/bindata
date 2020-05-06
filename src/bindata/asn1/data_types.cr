@@ -168,8 +168,9 @@ class ASN1::BER < BinData
     self
   end
 
-  def get_integer : Int64
-    ensure_universal(UniversalTags::Integer)
+  def get_integer(check_tags = {UniversalTags::Integer, UniversalTags::Enumerated}, check_class = TagClass::Universal) : Int64
+    raise InvalidTag.new("not a universal tag: #{tag_class}") unless tag_class == check_class
+    raise InvalidTag.new("object is a #{tag}, expecting one of #{check_tags}") unless check_tags.includes?(tag)
     return 0_i64 if @payload.size == 0
 
     # Check if first bit is set indicating negativity
@@ -203,9 +204,9 @@ class ASN1::BER < BinData
     @payload
   end
 
-  def set_integer(value)
-    self.tag_class = TagClass::Universal
-    self.tag_number = UniversalTags::Integer
+  def set_integer(value, tag = UniversalTags::Integer, tag_class = TagClass::Universal)
+    self.tag_class = tag_class
+    self.tag_number = tag
 
     # extract the bytes from the value
     if value.responds_to?(:to_io)
