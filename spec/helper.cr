@@ -126,3 +126,12 @@ class RemainingBytesData < BinData
   uint8 :first
   remaining_bytes :rest, onlyif: ->{ first == 0x02 }, verify: ->{ rest.size % 2 == 0 }
 end
+
+class ObjectIdentifier < BinData
+  endian :big
+
+  bit_field do
+    bits 10, :object_type
+    bits 22, :instance_number
+  end
+end

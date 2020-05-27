@@ -78,4 +78,13 @@ describe BinData::BitField do
     b.write(io2)
     io2.to_slice.should eq(Bytes[0x00, 0x80])
   end
+
+  it "should read a complex bitfield object" do
+    bytes = "023fffff".hexbytes
+    io = IO::Memory.new(bytes)
+    obj = io.read_bytes(ObjectIdentifier)
+    obj.object_type.should eq(8)
+    obj.instance_number.should eq(4194303)
+    obj.to_slice.should eq(bytes)
+  end
 end

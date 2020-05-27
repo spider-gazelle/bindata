@@ -61,24 +61,14 @@ class BinData::BitField
     buffer
   end
 
-  # Not used as this was misguided
-  # macro format_value(value, klass, format)
-  #  if {{format}} != IO::ByteFormat::BigEndian
-  #      ENDIAN_IO.rewind
-  #      ENDIAN_IO.write_bytes({{value}}, IO::ByteFormat::BigEndian)
-  #      ENDIAN_IO.rewind
-  #      {{value}} = ENDIAN_IO.read_bytes({{klass}}, {{format}})
-  #    end
-  #  end
-
   def read(input, format) # ameba:disable Metrics/CyclomaticComplexity
     # Fill the buffer
     buffer = @buffer.not_nil!
     input.read(buffer)
 
-    # Check if we need to re-order the bytes
-    if format == IO::ByteFormat::LittleEndian
-    end
+    # TODO:: Check if we need to re-order the bytes
+    # if format == IO::ByteFormat::LittleEndian
+    # end
 
     @mappings.each do |name, size|
       # Read out the data we are after using this buffer
@@ -104,8 +94,15 @@ class BinData::BitField
           value = value & ((1_u16 << size) - 1_u16)
         end
       elsif size <= 32
-        value = io.read_bytes(UInt32, IO::ByteFormat::BigEndian)
+        # adjust buffer as required to read the value
+        if (io.size - io.pos) < 4
+          io_new = IO::Memory.new(Bytes.new(4))
+          io_new.write io.to_slice[io.pos..-1]
+          io = io_new
+          io.rewind
+        end
 
+        value = io.read_bytes(UInt32, IO::ByteFormat::BigEndian)
         if size < 32
           # Shift the bits we're interested in towards 0 (as they are high bits)
           value = value >> (32 - size)
@@ -113,6 +110,14 @@ class BinData::BitField
           value = value & ((1_u32 << size) - 1_u32)
         end
       elsif size <= 64
+        # adjust buffer as required to read the value
+        if (io.size - io.pos) < 8
+          io_new = IO::Memory.new(Bytes.new(8))
+          io_new.write io.to_slice[io.pos..-1]
+          io = io_new
+          io.rewind
+        end
+
         value = io.read_bytes(UInt64, IO::ByteFormat::BigEndian)
         if size < 64
           # Shift the bits we're interested in towards 0 (as they are high bits)
@@ -121,6 +126,14 @@ class BinData::BitField
           value = value & ((1_u64 << size) - 1_u64)
         end
       elsif size <= 128
+        # adjust buffer as required to read the value
+        if (io.size - io.pos) < 16
+          io_new = IO::Memory.new(Bytes.new(16))
+          io_new.write io.to_slice[io.pos..-1]
+          io = io_new
+          io.rewind
+        end
+
         value = io.read_bytes(UInt128, IO::ByteFormat::BigEndian)
         if size < 128
           # Shift the bits we're interested in towards 0 (as they are high bits)
@@ -156,13 +169,34 @@ class BinData::BitField
       offset = bitpos % 8
       start_byte = bitpos // 8
 
+      num_bytes = size // 8
+      num_bytes += 1 if (size % 8) > 0
+
       # The extra byte lets us easily write to the buffer
       # without overwriting existing bytes
       start_byte += 1 if offset != 0
-
       value = @values[name]
+
+      # Make sure there is enough space to write the bits
+      temp_size = case value
+                  when UInt8
+                    1
+                  when UInt16
+                    2
+                  when UInt32
+                    4
+                  when UInt64
+                    8
+                  when UInt128
+                    16
+                  else
+                    0
+                  end
+      temp_io = IO::Memory.new(Bytes.new(temp_size))
+      temp_io.write_bytes(value, IO::ByteFormat::BigEndian)
+
       output.pos = start_byte
-      output.write_bytes(value, IO::ByteFormat::BigEndian)
+      output.write(temp_io.to_slice[(temp_size - num_bytes)..-1])
       bitpos += size
 
       # Calculate how many full bytes to move back
