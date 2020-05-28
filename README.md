@@ -146,3 +146,5 @@ ber.tag_class # => ASN1::BER::TagClass::Universal
   * https://github.com/spider-gazelle/crystal-ldap
 * enums and bit fields
   * https://github.com/spider-gazelle/knx/blob/master/src/knx/cemi.cr#L195
+* variable sized arrays
+  * https://github.com/spider-gazelle/crystal-bacnet/blob/master/src/bacnet/secure_bvlci.cr
