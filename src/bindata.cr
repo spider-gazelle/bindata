@@ -68,8 +68,9 @@ abstract class BinData
     io
   end
 
-  def to_io(io : IO, format : IO::ByteFormat = IO::ByteFormat::SystemEndian)
+  def to_io(io : IO, format : IO::ByteFormat = IO::ByteFormat::SystemEndian) : Int64
     write(io)
+    0i64 # TODO
   end
 
   def self.from_io(io : IO, format : IO::ByteFormat = IO::ByteFormat::SystemEndian)
