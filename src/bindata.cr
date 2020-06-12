@@ -60,17 +60,16 @@ abstract class BinData
     io
   end
 
-  def write(io : IO) : IO
+  def write(io : IO) : Int64
     __perform_write__(io)
   end
 
-  protected def __perform_write__(io : IO) : IO
-    io
+  protected def __perform_write__(_io : IO) : Int64
+    0_i64
   end
 
   def to_io(io : IO, format : IO::ByteFormat = IO::ByteFormat::SystemEndian) : Int64
     write(io)
-    0i64 # TODO
   end
 
   def self.from_io(io : IO, format : IO::ByteFormat = IO::ByteFormat::SystemEndian)
@@ -186,9 +185,9 @@ abstract class BinData
       io
     end
 
-    protected def __perform_write__(io : IO) : IO
+    protected def __perform_write__(io : IO) : Int64
       # Support inheritance
-      super(io)
+      wrote = super(io)
 
       {% for part in PARTS %}
         {% if part[:onlyif] %}
@@ -211,34 +210,34 @@ abstract class BinData
           {% part_type = part[:cls].resolve %}
           {% if part_type.is_a?(Union) || part_type.union? %}
             if __temp_{{part[:name]}} = @{{part[:name]}}
-              io.write_bytes(__temp_{{part[:name]}}, __format__)
+              wrote += io.write_bytes(__temp_{{part[:name]}}, __format__)
             else
               raise NilAssertionError.new("unable to write nil value for #{self.class}##{{{part[:name].stringify}}}")
             end
           {% else %}
-            io.write_bytes(@{{part[:name]}}, __format__)
+            wrote += io.write_bytes(@{{part[:name]}}, __format__)
           {% end %}
 
         {% elsif part[:type] == "array" || part[:type] == "variable_array" %}
           @{{part[:name]}}.each do |part|
-            io.write_bytes(part, __format__)
+            wrote += io.write_bytes(part, __format__)
           end
 
         {% elsif part[:type] == "enum" %}
           %value = {{part[:cls]}}.new(@{{part[:name]}}.to_i)
-          io.write_bytes(%value, __format__)
+          wrote += io.write_bytes(%value, __format__)
 
         {% elsif part[:type] == "group" %}
           @{{part[:name]}}.parent = self
-          io.write_bytes(@{{part[:name]}}, __format__)
+          wrote += io.write_bytes(@{{part[:name]}}, __format__)
 
         {% elsif part[:type] == "bytes" %}
-          io.write(@{{part[:name]}})
+          wrote += io.write(@{{part[:name]}})
 
         {% elsif part[:type] == "string" %}
-          io.write(@{{part[:name]}}.to_slice)
+          wrote += io.write(@{{part[:name]}}.to_slice)
           {% if !part[:length] %}
-            io.write_byte(0_u8)
+            wrote += io.write_byte(0_u8)
           {% end %}
 
         {% elsif part[:type] == "bitfield" %}
@@ -253,7 +252,7 @@ abstract class BinData
             %bitfield[{{name.id.stringify}}] = @{{name}}.not_nil!
           {% end %}
 
-          %bitfield.write(io, __format__)
+          wrote += %bitfield.write(io, __format__)
         {% end %}
 
         {% if part[:onlyif] %}
@@ -272,7 +271,7 @@ abstract class BinData
           %onlyif = ({{REMAINING[0][:onlyif]}}).call
           if %onlyif
         {% end %}
-        io.write(@{{REMAINING[0][:name]}})
+        wrote += io.write(@{{REMAINING[0][:name]}})
         {% if REMAINING[0][:onlyif] %}
           end
         {% end %}
@@ -283,7 +282,7 @@ abstract class BinData
         {% end %}
       {% end %}
 
-      io
+      wrote
     end
   end
 
