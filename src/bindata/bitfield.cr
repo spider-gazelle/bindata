@@ -159,7 +159,7 @@ class BinData::BitField
     input
   end
 
-  def write(io, format) : Int64
+  def write(io, format)
     # Fill the buffer
     bytes = (@bitsize // 8) + 1
     buffer = Bytes.new(bytes)
@@ -235,6 +235,8 @@ class BinData::BitField
     end
 
     io.write(buffer[0, bytes - 1])
+
+    io
   end
 
   def []=(name, value)
