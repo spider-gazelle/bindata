@@ -90,12 +90,12 @@ module ASN1
       io
     end
 
-    def write(io : IO) : IO
+    def write(io : IO)
       @length.length = @payload.size
       super(io)
       io.write(@payload)
       io.write_bytes(0_u16) if @length.indefinite?
-      io
+      0_i64
     end
 
     # Check if this can be expanded into multiple sub-entries

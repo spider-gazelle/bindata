@@ -236,7 +236,7 @@ class BinData::BitField
 
     io.write(buffer[0, bytes - 1])
 
-    io
+    0_i64
   end
 
   def []=(name, value)

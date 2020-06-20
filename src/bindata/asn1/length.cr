@@ -41,7 +41,7 @@ class ASN1::BER < BinData
       io
     end
 
-    def write(io : IO) : IO
+    def write(io : IO)
       self.long = true if @length >= 127
 
       if long
@@ -66,6 +66,7 @@ class ASN1::BER < BinData
       end
 
       super(io)
+      0_i64
     end
   end
 end

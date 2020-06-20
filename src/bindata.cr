@@ -60,8 +60,9 @@ abstract class BinData
     io
   end
 
-  def write(io : IO) : IO
+  def write(io : IO)
     __perform_write__(io)
+    0_i64
   end
 
   protected def __perform_write__(io : IO) : IO
