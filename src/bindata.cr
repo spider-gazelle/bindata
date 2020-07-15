@@ -200,11 +200,12 @@ abstract class BinData
           # check if we need to configure the value
           %value = ({{part[:value]}}).call
           # This ensures numbers are cooerced to the correct type
-          if %value.is_a?(Number)
+          # NOTE:: `if %value.is_a?(Number)` had issues with `String` due to `.new(0)`
+          {% if part[:type] == "basic" %}
             @{{part[:name]}} = {{part[:cls]}}.new(0) | %value
-          else
+          {% else %}
             @{{part[:name]}} = %value || @{{part[:name]}}
-          end
+          {% end %}
         {% end %}
 
         {% if part[:type] == "basic" %}
