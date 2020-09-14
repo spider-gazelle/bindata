@@ -87,4 +87,12 @@ describe BinData::BitField do
     obj.instance_number.should eq(4194303)
     obj.to_slice.should eq(bytes)
   end
+
+  it "should raise an error when there is not enough data" do
+    io = IO::Memory.new
+    io.write_byte(0x80)
+    expect_raises BinData::ParseError, "failed to parse ByteSized.bitfield.header" do
+      obj = io.read_bytes(ByteSized)
+    end
+  end
 end

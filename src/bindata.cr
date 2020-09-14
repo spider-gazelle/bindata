@@ -1,6 +1,9 @@
 abstract class BinData
-  class VerificationException < Exception
-  end
+  class VerificationException < Exception; end
+
+  class ParseError < Exception; end
+
+  class WriteError < Exception; end
 
   INDEX     = [-1]
   BIT_PARTS = [] of Nil
@@ -84,104 +87,122 @@ abstract class BinData
       # Support inheritance
       super(io)
 
-      {% for part in PARTS %}
-        {% if part[:onlyif] %}
-          %onlyif = ({{part[:onlyif]}}).call
-          if %onlyif
-        {% end %}
+      type_name = {{@type.stringify}}
+      part_name = ""
 
-        {% if part[:type] == "basic" %}
-          {% part_type = part[:cls].resolve %}
-          {% if part_type.is_a?(Union) %}
-            @{{part[:name]}} = io.read_bytes({{part_type.types.reject { |pt| pt.nilable? }[0]}}, __format__)
-          {% elsif part_type.union? %}
-            @{{part[:name]}} = io.read_bytes({{part_type.union_types.reject { |pt| pt.nilable? }[0]}}, __format__)
+      begin
+        {% for part in PARTS %}
+          {% if part[:type] == "bitfield" %}
+            part_name = {{"bitfield." + BIT_PARTS[part[:name]].keys[0].id.stringify}}
           {% else %}
-            @{{part[:name]}} = io.read_bytes({{part[:cls]}}, __format__)
+            part_name = {{part[:name].id.stringify}}
           {% end %}
 
-        {% elsif part[:type] == "array" %}
-          %size = ({{part[:length]}}).call.not_nil!
-          @{{part[:name]}} = [] of {{part[:cls]}}
-          (0...%size).each do
-            @{{part[:name]}} << io.read_bytes({{part[:cls]}}, __format__)
-          end
+          {% if part[:onlyif] %}
+            %onlyif = ({{part[:onlyif]}}).call
+            if %onlyif
+          {% end %}
 
-        {% elsif part[:type] == "variable_array" %}
+          {% if part[:type] == "basic" %}
+            {% part_type = part[:cls].resolve %}
+            {% if part_type.is_a?(Union) %}
+              @{{part[:name]}} = io.read_bytes({{part_type.types.reject { |pt| pt.nilable? }[0]}}, __format__)
+            {% elsif part_type.union? %}
+              @{{part[:name]}} = io.read_bytes({{part_type.union_types.reject { |pt| pt.nilable? }[0]}}, __format__)
+            {% else %}
+              @{{part[:name]}} = io.read_bytes({{part[:cls]}}, __format__)
+            {% end %}
+
+          {% elsif part[:type] == "array" %}
+            %size = ({{part[:length]}}).call.not_nil!
             @{{part[:name]}} = [] of {{part[:cls]}}
-            loop do
-              # Stop if the callback indicates there is no more
-              break unless ({{part[:length]}}).call
+            (0...%size).each do
               @{{part[:name]}} << io.read_bytes({{part[:cls]}}, __format__)
             end
 
-        {% elsif part[:type] == "enum" %}
-          %value = io.read_bytes({{part[:cls]}}, __format__).to_i
-          @{{part[:name]}} = {{part[:encoding]}}.from_value(%value)
+          {% elsif part[:type] == "variable_array" %}
+              @{{part[:name]}} = [] of {{part[:cls]}}
+              loop do
+                # Stop if the callback indicates there is no more
+                break unless ({{part[:length]}}).call
+                @{{part[:name]}} << io.read_bytes({{part[:cls]}}, __format__)
+              end
 
-        {% elsif part[:type] == "group" %}
-          @{{part[:name]}} = {{part[:cls]}}.new
-          @{{part[:name]}}.parent = self
-          @{{part[:name]}}.read(io)
+          {% elsif part[:type] == "enum" %}
+            %value = io.read_bytes({{part[:cls]}}, __format__).to_i
+            @{{part[:name]}} = {{part[:encoding]}}.from_value(%value)
 
-        {% elsif part[:type] == "bytes" %}
-          # There is a length calculation
-          %size = ({{part[:length]}}).call.not_nil!
-          %buf = Bytes.new(%size)
-          io.read_fully(%buf)
-          @{{part[:name]}} = %buf
+          {% elsif part[:type] == "group" %}
+            @{{part[:name]}} = {{part[:cls]}}.new
+            @{{part[:name]}}.parent = self
+            @{{part[:name]}}.read(io)
 
-        {% elsif part[:type] == "string" %}
-          {% if part[:length] %}
+          {% elsif part[:type] == "bytes" %}
             # There is a length calculation
             %size = ({{part[:length]}}).call.not_nil!
             %buf = Bytes.new(%size)
             io.read_fully(%buf)
-            @{{part[:name]}} = String.new(%buf)
-          {% else %}
-            # Assume the string is 0 terminated
-            @{{part[:name]}} = (io.gets('\0') || "")[0..-2]
+            @{{part[:name]}} = %buf
+
+          {% elsif part[:type] == "string" %}
+            {% if part[:length] %}
+              # There is a length calculation
+              %size = ({{part[:length]}}).call.not_nil!
+              %buf = Bytes.new(%size)
+              io.read_fully(%buf)
+              @{{part[:name]}} = String.new(%buf)
+            {% else %}
+              # Assume the string is 0 terminated
+              @{{part[:name]}} = (io.gets('\0') || "")[0..-2]
+            {% end %}
+
+          {% elsif part[:type] == "bitfield" %}
+            %bitfield = self.class.bit_fields["{{part[:cls]}}_{{part[:name]}}"]
+            %bitfield.read(io, __format__)
+
+            # Apply the values (with their correct type)
+            {% for name, value in BIT_PARTS[part[:name]] %}
+              %value = %bitfield[{{name.id.stringify}}]
+              @{{name}} = %value.as({{value[0]}})
+            {% end %}
           {% end %}
 
-        {% elsif part[:type] == "bitfield" %}
-          %bitfield = self.class.bit_fields["{{part[:cls]}}_{{part[:name]}}"]
-          %bitfield.read(io, __format__)
+          {% if part[:onlyif] %}
+            end
+          {% end %}
 
-          # Apply the values (with their correct type)
-          {% for name, value in BIT_PARTS[part[:name]] %}
-            %value = %bitfield[{{name.id.stringify}}]
-            @{{name}} = %value.as({{value[0]}})
+          {% if part[:verify] %}
+            if !({{part[:verify]}}).call
+              raise VerificationException.new "Failed to verify reading #{{{part[:type]}}} at {{@type}}.{{part[:name]}}"
+            end
           {% end %}
         {% end %}
 
-        {% if part[:onlyif] %}
-          end
+        {% if REMAINING.size > 0 %}
+          part_name = {{REMAINING[0][:name].id.stringify}}
+
+          {% if REMAINING[0][:onlyif] %}
+            %onlyif = ({{REMAINING[0][:onlyif]}}).call
+            if %onlyif
+          {% end %}
+          %buf = Bytes.new io.size - io.pos
+          io.read_fully %buf
+          @{{REMAINING[0][:name]}} = %buf
+          {% if REMAINING[0][:onlyif] %}
+            end
+          {% end %}
+          {% if REMAINING[0][:verify] %}
+            if !({{REMAINING[0][:verify]}}).call
+              raise VerificationException.new "Failed to verify reading #{{{REMAINING[0][:type]}}} at {{@type}}.{{REMAINING[0][:name]}}"
+            end
+          {% end %}
         {% end %}
 
-        {% if part[:verify] %}
-          if !({{part[:verify]}}).call
-            raise VerificationException.new "Failed to verify reading #{{{part[:type]}}} at {{@type}}.{{part[:name]}}"
-          end
-        {% end %}
-      {% end %}
-
-      {% if REMAINING.size > 0 %}
-        {% if REMAINING[0][:onlyif] %}
-          %onlyif = ({{REMAINING[0][:onlyif]}}).call
-          if %onlyif
-        {% end %}
-        %buf = Bytes.new io.size - io.pos
-        io.read_fully %buf
-        @{{REMAINING[0][:name]}} = %buf
-        {% if REMAINING[0][:onlyif] %}
-          end
-        {% end %}
-        {% if REMAINING[0][:verify] %}
-          if !({{REMAINING[0][:verify]}}).call
-            raise VerificationException.new "Failed to verify reading #{{{REMAINING[0][:type]}}} at {{@type}}.{{REMAINING[0][:name]}}"
-          end
-        {% end %}
-      {% end %}
+      rescue ex : VerificationException | ParseError
+        raise ex
+      rescue error
+        raise ParseError.new "failed to parse #{type_name}.#{part_name}", error
+      end
 
       io
     end
@@ -190,99 +211,117 @@ abstract class BinData
       # Support inheritance
       super(io)
 
-      {% for part in PARTS %}
-        {% if part[:onlyif] %}
-          %onlyif = ({{part[:onlyif]}}).call
-          if %onlyif
-        {% end %}
+      type_name = {{@type.stringify}}
+      part_name = ""
 
-        {% if part[:value] %}
-          # check if we need to configure the value
-          %value = ({{part[:value]}}).call
-          # This ensures numbers are cooerced to the correct type
-          # NOTE:: `if %value.is_a?(Number)` had issues with `String` due to `.new(0)`
+      begin
+        {% for part in PARTS %}
+          {% if part[:type] == "bitfield" %}
+            part_name = {{"bitfield." + BIT_PARTS[part[:name]].keys[0].id.stringify}}
+          {% else %}
+            part_name = {{part[:name].id.stringify}}
+          {% end %}
+
+          {% if part[:onlyif] %}
+            %onlyif = ({{part[:onlyif]}}).call
+            if %onlyif
+          {% end %}
+
+          {% if part[:value] %}
+            # check if we need to configure the value
+            %value = ({{part[:value]}}).call
+            # This ensures numbers are cooerced to the correct type
+            # NOTE:: `if %value.is_a?(Number)` had issues with `String` due to `.new(0)`
+            {% if part[:type] == "basic" %}
+              @{{part[:name]}} = {{part[:cls]}}.new(0) | %value
+            {% else %}
+              @{{part[:name]}} = %value || @{{part[:name]}}
+            {% end %}
+          {% end %}
+
           {% if part[:type] == "basic" %}
-            @{{part[:name]}} = {{part[:cls]}}.new(0) | %value
-          {% else %}
-            @{{part[:name]}} = %value || @{{part[:name]}}
-          {% end %}
-        {% end %}
-
-        {% if part[:type] == "basic" %}
-          {% part_type = part[:cls].resolve %}
-          {% if part_type.is_a?(Union) || part_type.union? %}
-            if __temp_{{part[:name]}} = @{{part[:name]}}
-              io.write_bytes(__temp_{{part[:name]}}, __format__)
-            else
-              raise NilAssertionError.new("unable to write nil value for #{self.class}##{{{part[:name].stringify}}}")
-            end
-          {% else %}
-            io.write_bytes(@{{part[:name]}}, __format__)
-          {% end %}
-
-        {% elsif part[:type] == "array" || part[:type] == "variable_array" %}
-          @{{part[:name]}}.each do |part|
-            io.write_bytes(part, __format__)
-          end
-
-        {% elsif part[:type] == "enum" %}
-          %value = {{part[:cls]}}.new(@{{part[:name]}}.to_i)
-          io.write_bytes(%value, __format__)
-
-        {% elsif part[:type] == "group" %}
-          @{{part[:name]}}.parent = self
-          io.write_bytes(@{{part[:name]}}, __format__)
-
-        {% elsif part[:type] == "bytes" %}
-          io.write(@{{part[:name]}})
-
-        {% elsif part[:type] == "string" %}
-          io.write(@{{part[:name]}}.to_slice)
-          {% if !part[:length] %}
-            io.write_byte(0_u8)
-          {% end %}
-
-        {% elsif part[:type] == "bitfield" %}
-          # Apply any values
-          %bitfield = self.class.bit_fields["{{part[:cls]}}_{{part[:name]}}"]
-          {% for name, value in BIT_PARTS[part[:name]] %}
-            {% if value[1] %}
-              %value = ({{value[1]}}).call
-              @{{name}} = %value || @{{name}}
+            {% part_type = part[:cls].resolve %}
+            {% if part_type.is_a?(Union) || part_type.union? %}
+              if __temp_{{part[:name]}} = @{{part[:name]}}
+                io.write_bytes(__temp_{{part[:name]}}, __format__)
+              else
+                raise NilAssertionError.new("unable to write nil value for #{self.class}##{{{part[:name].stringify}}}")
+              end
+            {% else %}
+              io.write_bytes(@{{part[:name]}}, __format__)
             {% end %}
 
-            %bitfield[{{name.id.stringify}}] = @{{name}}.not_nil!
+          {% elsif part[:type] == "array" || part[:type] == "variable_array" %}
+            @{{part[:name]}}.each do |part|
+              io.write_bytes(part, __format__)
+            end
+
+          {% elsif part[:type] == "enum" %}
+            %value = {{part[:cls]}}.new(@{{part[:name]}}.to_i)
+            io.write_bytes(%value, __format__)
+
+          {% elsif part[:type] == "group" %}
+            @{{part[:name]}}.parent = self
+            io.write_bytes(@{{part[:name]}}, __format__)
+
+          {% elsif part[:type] == "bytes" %}
+            io.write(@{{part[:name]}})
+
+          {% elsif part[:type] == "string" %}
+            io.write(@{{part[:name]}}.to_slice)
+            {% if !part[:length] %}
+              io.write_byte(0_u8)
+            {% end %}
+
+          {% elsif part[:type] == "bitfield" %}
+            # Apply any values
+            %bitfield = self.class.bit_fields["{{part[:cls]}}_{{part[:name]}}"]
+            {% for name, value in BIT_PARTS[part[:name]] %}
+              {% if value[1] %}
+                %value = ({{value[1]}}).call
+                @{{name}} = %value || @{{name}}
+              {% end %}
+
+              %bitfield[{{name.id.stringify}}] = @{{name}}.not_nil!
+            {% end %}
+
+            %bitfield.write(io, __format__)
           {% end %}
 
-          %bitfield.write(io, __format__)
+          {% if part[:onlyif] %}
+            end
+          {% end %}
+
+          {% if part[:verify] %}
+            if !({{part[:verify]}}).call
+              raise VerificationException.new "Failed to verify writing #{{{part[:type]}}} at {{@type}}.{{part[:name]}}"
+            end
+          {% end %}
         {% end %}
 
-        {% if part[:onlyif] %}
-          end
+        {% if REMAINING.size > 0 %}
+          part_name = {{REMAINING[0][:name].id.stringify}}
+
+          {% if REMAINING[0][:onlyif] %}
+            %onlyif = ({{REMAINING[0][:onlyif]}}).call
+            if %onlyif
+          {% end %}
+          io.write(@{{REMAINING[0][:name]}})
+          {% if REMAINING[0][:onlyif] %}
+            end
+          {% end %}
+          {% if REMAINING[0][:verify] %}
+            if !({{REMAINING[0][:verify]}}).call
+              raise VerificationException.new "Failed to verify writing #{{{REMAINING[0][:type]}}} at {{@type}}.{{REMAINING[0][:name]}}"
+            end
+          {% end %}
         {% end %}
 
-        {% if part[:verify] %}
-          if !({{part[:verify]}}).call
-            raise VerificationException.new "Failed to verify writing #{{{part[:type]}}} at {{@type}}.{{part[:name]}}"
-          end
-        {% end %}
-      {% end %}
-
-      {% if REMAINING.size > 0 %}
-        {% if REMAINING[0][:onlyif] %}
-          %onlyif = ({{REMAINING[0][:onlyif]}}).call
-          if %onlyif
-        {% end %}
-        io.write(@{{REMAINING[0][:name]}})
-        {% if REMAINING[0][:onlyif] %}
-          end
-        {% end %}
-        {% if REMAINING[0][:verify] %}
-          if !({{REMAINING[0][:verify]}}).call
-            raise VerificationException.new "Failed to verify writing #{{{REMAINING[0][:type]}}} at {{@type}}.{{REMAINING[0][:name]}}"
-          end
-        {% end %}
-      {% end %}
+      rescue ex : VerificationException | WriteError
+        raise ex
+      rescue error
+        raise WriteError.new "failed to write #{type_name}.#{part_name}", error
+      end
 
       io
     end
