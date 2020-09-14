@@ -87,7 +87,6 @@ abstract class BinData
       # Support inheritance
       super(io)
 
-      type_name = {{@type.stringify}}
       part_name = ""
 
       begin
@@ -173,7 +172,7 @@ abstract class BinData
 
           {% if part[:verify] %}
             if !({{part[:verify]}}).call
-              raise VerificationException.new "Failed to verify reading #{{{part[:type]}}} at {{@type}}.{{part[:name]}}"
+              raise VerificationException.new "Failed to verify reading {{part[:type].id}} at {{@type}}.{{part[:name]}}"
             end
           {% end %}
         {% end %}
@@ -193,7 +192,7 @@ abstract class BinData
           {% end %}
           {% if REMAINING[0][:verify] %}
             if !({{REMAINING[0][:verify]}}).call
-              raise VerificationException.new "Failed to verify reading #{{{REMAINING[0][:type]}}} at {{@type}}.{{REMAINING[0][:name]}}"
+              raise VerificationException.new "Failed to verify reading {{REMAINING[0][:type].id}} at {{@type}}.{{REMAINING[0][:name]}}"
             end
           {% end %}
         {% end %}
@@ -201,7 +200,7 @@ abstract class BinData
       rescue ex : VerificationException | ParseError
         raise ex
       rescue error
-        raise ParseError.new "failed to parse #{type_name}.#{part_name}", error
+        raise ParseError.new "failed to parse {{@type.id}}.#{part_name}", error
       end
 
       io
@@ -211,7 +210,6 @@ abstract class BinData
       # Support inheritance
       super(io)
 
-      type_name = {{@type.stringify}}
       part_name = ""
 
       begin
@@ -294,7 +292,7 @@ abstract class BinData
 
           {% if part[:verify] %}
             if !({{part[:verify]}}).call
-              raise VerificationException.new "Failed to verify writing #{{{part[:type]}}} at {{@type}}.{{part[:name]}}"
+              raise VerificationException.new "Failed to verify writing {{part[:type].id}} at {{@type}}.{{part[:name]}}"
             end
           {% end %}
         {% end %}
@@ -312,7 +310,7 @@ abstract class BinData
           {% end %}
           {% if REMAINING[0][:verify] %}
             if !({{REMAINING[0][:verify]}}).call
-              raise VerificationException.new "Failed to verify writing #{{{REMAINING[0][:type]}}} at {{@type}}.{{REMAINING[0][:name]}}"
+              raise VerificationException.new "Failed to verify writing {{REMAINING[0][:type].id}} at {{@type}}.{{REMAINING[0][:name]}}"
             end
           {% end %}
         {% end %}
@@ -320,7 +318,7 @@ abstract class BinData
       rescue ex : VerificationException | WriteError
         raise ex
       rescue error
-        raise WriteError.new "failed to write #{type_name}.#{part_name}", error
+        raise WriteError.new "failed to write {{@type.id}}.#{part_name}", error
       end
 
       io
