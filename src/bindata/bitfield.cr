@@ -64,7 +64,7 @@ class BinData::BitField
   def read(input, format) # ameba:disable Metrics/CyclomaticComplexity
     # Fill the buffer
     buffer = @buffer.not_nil!
-    input.read(buffer)
+    input.read_fully(buffer)
 
     # TODO:: Check if we need to re-order the bytes
     # if format == IO::ByteFormat::LittleEndian
