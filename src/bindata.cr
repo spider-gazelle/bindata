@@ -129,7 +129,7 @@ abstract class BinData
 
           {% elsif part[:type] == "enum" %}
             %value = io.read_bytes({{part[:cls]}}, __format__).to_i
-            @{{part[:name]}} = {{part[:encoding]}}.from_value(%value)
+            @{{part[:name]}} = {{part[:encoding]}}.new(%value)
 
           {% elsif part[:type] == "group" %}
             @{{part[:name]}} = {{part[:cls]}}.new
