@@ -92,7 +92,7 @@ describe BinData::BitField do
     io = IO::Memory.new
     io.write_byte(0x80)
     expect_raises BinData::ParseError, "failed to parse ByteSized.bitfield.header" do
-      obj = io.read_bytes(ByteSized)
+      io.read_bytes(ByteSized)
     end
   end
 end
