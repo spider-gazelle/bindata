@@ -1,6 +1,13 @@
 require "./helper"
 
 describe BinData do
+  it "should parse an object from a Slice" do
+    r = Header.new
+    r.name = "foo"
+    slice = r.to_slice
+    Header.from_slice(slice).name.should eq "foo"
+  end
+
   it "should parse an object from an IO" do
     io = IO::Memory.new
     io.write_bytes 5

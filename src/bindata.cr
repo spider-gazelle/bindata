@@ -33,6 +33,11 @@ abstract class BinData
     IO::ByteFormat::SystemEndian
   end
 
+  def self.from_slice(bytes : Slice, format : IO::ByteFormat = IO::ByteFormat::SystemEndian)
+    io = IO::Memory.new(bytes)
+    from_io(io, format)
+  end
+
   def to_slice
     io = IO::Memory.new
     io.write_bytes self
