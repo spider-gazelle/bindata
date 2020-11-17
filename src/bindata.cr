@@ -350,7 +350,8 @@ abstract class BinData
   end
 
   macro bits(size, name, value = nil, default = nil)
-    %field = @@bit_fields["{{KLASS_NAME[0]}}_{{INDEX[0]}}"]
+    %field = @@bit_fields["{{KLASS_NAME[0]}}_{{INDEX[0]}}"]?
+    raise "#{KLASS_NAME[0]}#{ '#' }{{name}} is not defined in a bitfield. Using bitfield macro outside of a bitfield" unless %field
     %field.bits({{size}}, {{name.id.stringify}})
 
     {% if size <= 8 %}
