@@ -159,6 +159,7 @@ class BinData::BitField
     input
   end
 
+  # ameba:disable Metrics/CyclomaticComplexity
   def write(io, format)
     # Fill the buffer
     bytes = (@bitsize // 8) + 1

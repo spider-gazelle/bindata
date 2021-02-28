@@ -110,9 +110,9 @@ abstract class BinData
           {% if part[:type] == "basic" %}
             {% part_type = part[:cls].resolve %}
             {% if part_type.is_a?(Union) %}
-              @{{part[:name]}} = io.read_bytes({{part_type.types.reject { |pt| pt.nilable? }[0]}}, __format__)
+              @{{part[:name]}} = io.read_bytes({{part_type.types.reject(&.nilable?)[0]}}, __format__)
             {% elsif part_type.union? %}
-              @{{part[:name]}} = io.read_bytes({{part_type.union_types.reject { |pt| pt.nilable? }[0]}}, __format__)
+              @{{part[:name]}} = io.read_bytes({{part_type.union_types.reject(&.nilable?)[0]}}, __format__)
             {% else %}
               @{{part[:name]}} = io.read_bytes({{part[:cls]}}, __format__)
             {% end %}

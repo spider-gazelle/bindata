@@ -204,6 +204,7 @@ class ASN1::BER < BinData
     @payload
   end
 
+  # ameba:disable Metrics/CyclomaticComplexity
   def set_integer(value, tag = UniversalTags::Integer, tag_class = TagClass::Universal)
     self.tag_class = tag_class
     self.tag_number = tag

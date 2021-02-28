@@ -118,7 +118,7 @@ module ASN1
     def children=(parts)
       self.constructed = true
       io = IO::Memory.new
-      parts.each { |ber| ber.write(io) }
+      parts.each(&.write(io))
       @payload = io.to_slice
       parts
     end
