@@ -4,6 +4,7 @@ describe ASN1 do
   it "should parse basic universal BER Objects" do
     io = IO::Memory.new(Bytes[2, 1, 1])
     ber = io.read_bytes(ASN1::BER)
+    ber.inspect
 
     ber.tag_class.should eq(ASN1::BER::TagClass::Universal)
     ber.constructed.should eq(false)

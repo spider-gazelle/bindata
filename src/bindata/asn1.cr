@@ -125,7 +125,7 @@ module ASN1
 
     def inspect(io : IO) : Nil
       io << "#<" << {{@type.name.id.stringify}} << ":0x"
-      object_id.to_s(16, io)
+      object_id.to_s(io, 16)
 
       io << " tag_class="
       tag_class.to_s(io)
