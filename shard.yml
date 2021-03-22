@@ -1,5 +1,6 @@
 name: bindata
-version: 1.8.2
+version: 1.8.3
+crystal: ">= 1.0.0"
 
 development_dependencies:
   ameba:
