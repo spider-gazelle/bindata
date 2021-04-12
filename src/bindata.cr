@@ -5,14 +5,27 @@ abstract class BinData
 
   class WriteError < Exception; end
 
-  INDEX     = [-1]
-  BIT_PARTS = [] of Nil
+  INDEX          = [-1]
+  BIT_PARTS      = [] of Nil
+  CUSTOM_TYPES   = [] of BinData.class
+  RESERVED_NAMES = ["inherited", "included", "extended", "method_missing",
+                    "method_added", "finished"]
 
   macro inherited
     PARTS = [] of Nil
     ENDIAN = ["system"]
     KLASS_NAME = [{{@type.name.id}}]
     REMAINING = [] of Nil
+    {% BinData::CUSTOM_TYPES << @type.name.id %}
+
+    {% for custom_type in BinData::CUSTOM_TYPES %}
+    {% method_name = custom_type.gsub(/::/, "_").underscore.id %}
+      {% unless RESERVED_NAMES.includes? method_name.stringify %}
+        macro {{ method_name }}(name, onlyif = nil, verify = nil, value = nil)
+          custom {{method_name}} : {{custom_type}} = {{ custom_type }}.new
+        end
+      {% end %}
+    {% end %}
 
     def self.bit_fields
       {{@type.ancestors[0].id}}.bit_fields.merge(@@bit_fields)
