@@ -21,6 +21,7 @@ Then you can specify the structures fields. There are a few different field type
 
 1. Core types
    * `uint8`, `int128` which would accept `UInt8` and `Int128` values respectively
+   * You can use endian-aware types to mix endianess: ex `uint32le` will read `UInt32` regardless of `endian` set in class
 2. Custom types
    * anything that is [io serialisable](https://crystal-lang.org/api/0.27.2/IO.html#write_bytes%28object%2Cformat%3AIO%3A%3AByteFormat%3DIO%3A%3AByteFormat%3A%3ASystemEndian%29-instance-method)
 3. Bit Fields

@@ -96,6 +96,7 @@ abstract class BinData
 
       begin
         {% for part in PARTS %}
+          %endian = {% if part[:endian] %}{{ part[:endian] }}{% else %}__format__{% end %}
           {% if part[:type] == "bitfield" %}
             part_name = {{"bitfield." + BIT_PARTS[part[:name]].keys[0].id.stringify}}
           {% else %}
@@ -110,18 +111,18 @@ abstract class BinData
           {% if part[:type] == "basic" %}
             {% part_type = part[:cls].resolve %}
             {% if part_type.is_a?(Union) %}
-              @{{part[:name]}} = io.read_bytes({{part_type.types.reject(&.nilable?)[0]}}, __format__)
+              @{{part[:name]}} = io.read_bytes({{part_type.types.reject(&.nilable?)[0]}}, %endian)
             {% elsif part_type.union? %}
-              @{{part[:name]}} = io.read_bytes({{part_type.union_types.reject(&.nilable?)[0]}}, __format__)
+              @{{part[:name]}} = io.read_bytes({{part_type.union_types.reject(&.nilable?)[0]}}, %endian)
             {% else %}
-              @{{part[:name]}} = io.read_bytes({{part[:cls]}}, __format__)
+              @{{part[:name]}} = io.read_bytes({{part[:cls]}}, %endian)
             {% end %}
 
           {% elsif part[:type] == "array" %}
             %size = ({{part[:length]}}).call.not_nil!
             @{{part[:name]}} = [] of {{part[:cls]}}
             (0...%size).each do
-              @{{part[:name]}} << io.read_bytes({{part[:cls]}}, __format__)
+              @{{part[:name]}} << io.read_bytes({{part[:cls]}}, %endian)
             end
 
           {% elsif part[:type] == "variable_array" %}
@@ -129,11 +130,11 @@ abstract class BinData
               loop do
                 # Stop if the callback indicates there is no more
                 break unless ({{part[:length]}}).call
-                @{{part[:name]}} << io.read_bytes({{part[:cls]}}, __format__)
+                @{{part[:name]}} << io.read_bytes({{part[:cls]}}, %endian)
               end
 
           {% elsif part[:type] == "enum" %}
-            %value = io.read_bytes({{part[:cls]}}, __format__).to_i
+            %value = io.read_bytes({{part[:cls]}}, %endian).to_i
             @{{part[:name]}} = {{part[:encoding]}}.new(%value)
 
           {% elsif part[:type] == "group" %}
@@ -162,7 +163,7 @@ abstract class BinData
 
           {% elsif part[:type] == "bitfield" %}
             %bitfield = self.class.bit_fields["{{part[:cls]}}_{{part[:name]}}"]
-            %bitfield.read(io, __format__)
+            %bitfield.read(io, %endian)
 
             # Apply the values (with their correct type)
             {% for name, value in BIT_PARTS[part[:name]] %}
@@ -219,6 +220,8 @@ abstract class BinData
 
       begin
         {% for part in PARTS %}
+          %endian = {% if part[:endian] %}{{ part[:endian] }}{% else %}__format__{% end %}
+
           {% if part[:type] == "bitfield" %}
             part_name = {{"bitfield." + BIT_PARTS[part[:name]].keys[0].id.stringify}}
           {% else %}
@@ -246,26 +249,26 @@ abstract class BinData
             {% part_type = part[:cls].resolve %}
             {% if part_type.is_a?(Union) || part_type.union? %}
               if __temp_{{part[:name]}} = @{{part[:name]}}
-                io.write_bytes(__temp_{{part[:name]}}, __format__)
+                io.write_bytes(__temp_{{part[:name]}}, %endian)
               else
                 raise NilAssertionError.new("unable to write nil value for #{self.class}##{{{part[:name].stringify}}}")
               end
             {% else %}
-              io.write_bytes(@{{part[:name]}}, __format__)
+              io.write_bytes(@{{part[:name]}}, %endian)
             {% end %}
 
           {% elsif part[:type] == "array" || part[:type] == "variable_array" %}
             @{{part[:name]}}.each do |part|
-              io.write_bytes(part, __format__)
+              io.write_bytes(part, %endian)
             end
 
           {% elsif part[:type] == "enum" %}
             %value = {{part[:cls]}}.new(@{{part[:name]}}.to_i)
-            io.write_bytes(%value, __format__)
+            io.write_bytes(%value, %endian)
 
           {% elsif part[:type] == "group" %}
             @{{part[:name]}}.parent = self
-            io.write_bytes(@{{part[:name]}}, __format__)
+            io.write_bytes(@{{part[:name]}}, %endian)
 
           {% elsif part[:type] == "bytes" %}
             io.write(@{{part[:name]}})
@@ -288,7 +291,7 @@ abstract class BinData
               %bitfield[{{name.id.stringify}}] = @{{name}}.not_nil!
             {% end %}
 
-            %bitfield.write(io, __format__)
+            %bitfield.write(io, %endian)
           {% end %}
 
           {% if part[:onlyif] %}
@@ -336,6 +339,16 @@ abstract class BinData
     macro {{name}}(name, onlyif = nil, verify = nil, value = nil, default = nil)
       \{% PARTS << {type: "basic", name: name.id, cls: {{vartype.id}}, onlyif: onlyif, verify: verify, value: value} %}
       property \{{name.id}} : {{vartype.id}} = \{% if default %} {{vartype.id}}.new(\{{default}}) \{% else %} 0 \{% end %}
+    end
+
+    macro {{name}}be(name, onlyif = nil, verify = nil, value = nil, default = nil)
+    \{% PARTS << {type: "basic", name: name.id, cls: {{vartype.id}}, onlyif: onlyif, verify: verify, value: value, endian: IO::ByteFormat::BigEndian} %}
+    property \{{name.id}} : {{vartype.id}} = \{% if default %} {{vartype.id}}.new(\{{default}}) \{% else %} 0 \{% end %}
+    end
+
+    macro {{name}}le(name, onlyif = nil, verify = nil, value = nil, default = nil)
+    \{% PARTS << {type: "basic", name: name.id, cls: {{vartype.id}}, onlyif: onlyif, verify: verify, value: value, endian: IO::ByteFormat::LittleEndian} %}
+    property \{{name.id}} : {{vartype.id}} = \{% if default %} {{vartype.id}}.new(\{{default}}) \{% else %} 0 \{% end %}
     end
   {% end %}
 

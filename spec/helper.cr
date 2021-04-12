@@ -135,3 +135,12 @@ class ObjectIdentifier < BinData
     bits 22, :instance_number
   end
 end
+
+class MixedEndianLittle < BinData
+  endian :little
+
+  int16be :big
+  int32le :little
+
+  int128 :default
+end

@@ -35,4 +35,19 @@ describe BinData do
 
     io2.to_slice.should eq(io.to_slice)
   end
+
+  it "should allow mixed endianess" do
+    io = IO::Memory.new
+    io.write_bytes 0xBE_i16, IO::ByteFormat::BigEndian
+    io.write_bytes 0xFEED_i32, IO::ByteFormat::LittleEndian
+    io.write_bytes 0xDADFEDBEEF_i128, IO::ByteFormat::LittleEndian
+    io.rewind
+
+    r = MixedEndianLittle.new
+    r.read io
+
+    r.big.should eq(0xBE_i16)
+    r.little.should eq(0xFEED_i32)
+    r.default.should eq(0xDADFEDBEEF_i128)
+  end
 end
