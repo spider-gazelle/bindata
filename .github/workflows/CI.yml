@@ -1,0 +1,17 @@
+name: CI
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: crystallang/crystal
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install dependencies
+      run: shards install --ignore-crystal-version
+    - name: Lint
+      run: ./bin/ameba
+    - name: Format
+      run: crystal tool format --check
+    - name: Run tests
+      run: crystal spec --error-trace
