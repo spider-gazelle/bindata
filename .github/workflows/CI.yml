@@ -1,10 +1,22 @@
 name: CI
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"
 jobs:
   build:
-    runs-on: ubuntu-latest
-    container:
-      image: crystallang/crystal
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        crystal:
+          - latest
+          - nightly
+          - 1.0.0
+    runs-on: ${{ matrix.os }}
+    container: crystallang/crystal:${{ matrix.crystal }}-alpine
     steps:
     - uses: actions/checkout@v2
     - name: Install dependencies
@@ -14,4 +26,4 @@ jobs:
     - name: Format
       run: crystal tool format --check
     - name: Run tests
-      run: crystal spec --error-trace
+      run: crystal spec -v --error-trace
