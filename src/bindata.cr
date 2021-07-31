@@ -408,7 +408,7 @@ abstract class BinData
     {% end %}
 
     def {{name.var}} : {{name.type}}
-      {{name.type}}.from_value(@{{name.var}}.to_i)
+      {{name.type}}.new(@{{name.var}}.to_i)
     end
 
     def {{name.var}}=(value : {{name.type}})

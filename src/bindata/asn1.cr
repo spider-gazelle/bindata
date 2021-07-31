@@ -43,7 +43,7 @@ module ASN1
 
     def tag
       raise "only valid for universal tags" unless tag_class == TagClass::Universal
-      UniversalTags.from_value tag_number
+      UniversalTags.new tag_number.to_i
     end
 
     def extended?
@@ -101,7 +101,7 @@ module ASN1
     # Check if this can be expanded into multiple sub-entries
     def sequence?
       return false unless tag_class == TagClass::Universal
-      tag = UniversalTags.from_value tag_number
+      tag = UniversalTags.new tag_number.to_i
       constructed && {UniversalTags::Sequence, UniversalTags::Set}.includes?(tag)
     end
 
