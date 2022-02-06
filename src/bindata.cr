@@ -22,7 +22,7 @@ abstract class BinData
     {% method_name = custom_type.gsub(/::/, "_").underscore.id %}
       {% unless RESERVED_NAMES.includes? method_name.stringify %}
         macro {{ method_name }}(name, onlyif = nil, verify = nil, value = nil)
-          custom {{method_name}} : {{custom_type}} = {{ custom_type }}.new
+          custom \{{name.id}} : {{custom_type}} = {{ custom_type }}.new
         end
       {% end %}
     {% end %}
