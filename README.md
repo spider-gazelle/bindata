@@ -143,9 +143,9 @@ ber.tag_class # => ASN1::BER::TagClass::Universal
 ## Real World Examples:
 
 * ASN.1
-  * https://github.com/crystal-community/jwt/blob/master/src/jwt.cr#L193
+  * https://github.com/crystal-community/jwt/blob/master/src/jwt.cr#L251
   * https://github.com/spider-gazelle/crystal-ldap
 * enums and bit fields
   * https://github.com/spider-gazelle/knx/blob/master/src/knx/cemi.cr#L195
 * variable sized arrays
-  * https://github.com/spider-gazelle/crystal-bacnet/blob/master/src/bacnet/secure_bvlci.cr
+  * https://github.com/spider-gazelle/crystal-bacnet/blob/master/src/bacnet/virtual_link_control/secure_bvlci.cr#L54
