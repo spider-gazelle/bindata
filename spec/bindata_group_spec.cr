@@ -14,8 +14,8 @@ describe BinData do
     r = Wow.new
     r.read io
     r.start.should eq(0_u8)
-    r.header.size.should eq(5)
-    r.header.name.should eq("hello")
+    r.head.size.should eq(5)
+    r.head.name.should eq("hello")
     r.body.start.should eq(1_u8)
     r.body.end.should eq(3_u8)
     r.end.should eq(0_u8)
@@ -31,8 +31,8 @@ describe BinData do
     r = Wow.new
     r.read io
     r.start.should eq(0_u8)
-    r.header.size.should eq(0)
-    r.header.name.should eq("")
+    r.head.size.should eq(0)
+    r.head.name.should eq("")
     r.body.start.should eq(0)
     r.body.end.should eq(0)
     r.end.should eq(0_u8)
@@ -49,8 +49,8 @@ describe BinData do
     io.rewind
 
     r = Wow.new
-    r.header = Header.new
-    r.header.name = "whatwhat"
+    r.head = Header.new
+    r.head.name = "whatwhat"
 
     io2 = IO::Memory.new
     r.write(io2)

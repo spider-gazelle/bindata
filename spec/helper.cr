@@ -35,9 +35,9 @@ class Wow < BinData
   endian big
 
   uint8 :start, value: ->{ 0_u8 }
-  header :header
+  header :head
 
-  group :body, onlyif: ->{ header.size > 0 } do
+  group :body, onlyif: ->{ head.size > 0 } do
     uint8 :start, value: ->{ 1_u8 }, onlyif: ->{ parent.start == 0 }
     uint8 :end, value: ->{ 3_u8 }
   end
