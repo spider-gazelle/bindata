@@ -44,9 +44,12 @@ describe BinData do
     io.write Bytes.new 15
     io.rewind
 
-    expect_raises BinData::VerificationException, "Failed to verify reading bytes at RemainingBytesData.rest" do
+    ex = expect_raises BinData::ReadingVerificationException, "Failed to verify reading bytes at RemainingBytesData.rest" do
       io.read_bytes RemainingBytesData
     end
+    ex.klass.should eq("RemainingBytesData")
+    ex.field.should eq("rest")
+    ex.field_type.should eq("bytes")
   end
 
   it "runs verification as expected while writing" do
@@ -55,9 +58,12 @@ describe BinData do
     r.rest = Bytes.new 15
     io2 = IO::Memory.new
 
-    expect_raises BinData::VerificationException, "Failed to verify writing bytes at RemainingBytesData.rest" do
+    ex = expect_raises BinData::WritingVerificationException, "Failed to verify writing bytes at RemainingBytesData.rest" do
       r.write io2
     end
+    ex.klass.should eq("RemainingBytesData")
+    ex.field.should eq("rest")
+    ex.field_type.should eq("bytes")
   end
 
   it "abides by onlyif as expected" do
