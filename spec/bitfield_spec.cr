@@ -91,7 +91,7 @@ describe BinData::BitField do
   it "should raise an error when there is not enough data" do
     io = IO::Memory.new
     io.write_byte(0x80)
-    
+
     ex = expect_raises BinData::ParseError, "Failed to parse ByteSized.bitfield.header" do
       io.read_bytes(ByteSized)
     end
