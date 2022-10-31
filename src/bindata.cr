@@ -136,16 +136,15 @@ abstract class BinData
             end
 
           {% elsif part[:type] == "variable_array" %}
-              @{{part[:name]}} = [] of {{part[:cls]}}
-              loop do
-                # Stop if the callback indicates there is no more
-                break unless ({{part[:length]}}).call
-                @{{part[:name]}} << io.read_bytes({{part[:cls]}}, %endian)
-              end
+            @{{part[:name]}} = [] of {{part[:cls]}}
+            loop do
+              # Stop if the callback indicates there is no more
+              break unless ({{part[:length]}}).call
+              @{{part[:name]}} << io.read_bytes({{part[:cls]}}, %endian)
+            end
 
           {% elsif part[:type] == "enum" %}
-            %value = io.read_bytes({{part[:cls]}}, %endian).to_i
-            @{{part[:name]}} = {{part[:encoding]}}.new(%value)
+            @{{part[:name]}} = {{part[:encoding]}}.from_value(io.read_bytes({{part[:cls]}}, %endian))
 
           {% elsif part[:type] == "group" %}
             @{{part[:name]}} = {{part[:cls]}}.new

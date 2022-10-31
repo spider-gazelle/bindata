@@ -33,4 +33,25 @@ describe BinData do
 
     io2.to_slice.should eq(io.to_slice)
   end
+
+  it "should work with differently types" do
+    io = IO::Memory.new
+    io.write_bytes 0x0111_u16, IO::ByteFormat::BigEndian
+    io.rewind
+
+    p = io.read_bytes(Packet)
+    p.type.should eq(Packet::Type::Reply)
+  end
+end
+
+class Packet < BinData
+  endian big
+
+  enum Type : UInt16
+    Command = 0x0100
+    Inquiry = 0x0110
+    Reply   = 0x0111
+  end
+
+  enum_field UInt16, type : Type = Type::Command
 end
