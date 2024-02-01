@@ -6,7 +6,6 @@ This means the programmer specifies what the format of the binary data is, and B
 
 [![Build Status](https://github.com/spider-gazelle/bindata/actions/workflows/CI.yml/badge.svg?branch=master)](https://github.com/spider-gazelle/bindata/actions/workflows/CI.yml)
 
-
 ## Usage
 
 Firstly, it's recommended that you specify the datas endian.
@@ -20,8 +19,8 @@ end
 Then you can specify the structures fields. There are a few different field types:
 
 1. Core types
-   * `uint8`, `int128` which would accept `UInt8` and `Int128` values respectively
-   * You can use endian-aware types to mix endianess: ex `uint32le` will read `UInt32` regardless of `endian` set in class
+   * `UInt8` to `UInt128` values respectively
+   * You can use endian-aware types to mix endianess: `, endian: IO::ByteFormat::LittleEndian`
 2. Custom types
    * anything that is [io serialisable](https://crystal-lang.org/api/0.27.2/IO.html#write_bytes%28object%2Cformat%3AIO%3A%3AByteFormat%3DIO%3A%3AByteFormat%3A%3ASystemEndian%29-instance-method)
 3. Bit Fields
@@ -32,7 +31,7 @@ Then you can specify the structures fields. There are a few different field type
    * Useful when a group of fields are related or optional
 5. Enums
 6. Bools
-6. Arrays (fixed size and dynamic)
+6. Arrays and Sets (fixed size and dynamic)
 
 
 ### Examples
@@ -50,35 +49,35 @@ see the [spec helper](https://github.com/spider-gazelle/bindata/blob/master/spec
     endian big
 
     # Default sets the value at initialisation.
-    uint8 :start, default: 0xFF_u8
+    field start : UInt8 = 0xFF_u8
 
     # Value procs assign these values before writing to an IO, overwriting any
     # existing value
-    uint16 :size, value: ->{ text.bytesize + 1 }
+    field size : UInt16, value: ->{ text.bytesize + 1 }
 
     # String fields without a length use `\0` null byte termination
     # Length is being calculated by the size field above
-    string :text, length: ->{ size - 1 }
+    field text : String, length: ->{ size - 1 }
 
     # Bit fields should only be used when one or more fields are not byte aligned
     # The sum of the bits in a bit field must be divisible by 8
     bit_field do
       # a bits value can be between 1 and 128 bits long
-      bits 5, :reserved
+      bits 5, reserved
 
       # Bool values are a single bit
-      bool :set_input, default: false
+      bool set_input = false
 
       # This enum is represented by 2 bits
-      enum_bits 2, input : Inputs = Inputs::HDMI2
+      bits 2, input : Inputs = Inputs::HDMI2
     end
 
     # isolated namespace
     group :extended, onlyif: ->{ start == 0xFF } do
-      uint8 :start, default: 0xFF_u8
+      field start : UInt8 = 0xFF_u8
 
       # Supports custom objects as long as they implement `from_io`
-      custom header : ExtHeader = ExtHeader.new
+      field header : ExtHeader = ExtHeader.new
     end
 
     # optionally read the remaining bytes out of io
@@ -103,9 +102,9 @@ Additionally, BinData fields support a `verify` proc, which allows data to be ve
 class VerifyData < BinData
   endian big
 
-  uint8 :size
-  bytes :bytes, length: ->{ size }
-  uint8 :checksum, verify: ->{ checksum == bytes.reduce(0) { |acc, i| acc + i } }
+  field size : UInt8
+  field bytes : Bytes, length: ->{ size }
+  field checksum : UInt8, verify: ->{ checksum == bytes.reduce(0) { |acc, i| acc + i } }
 end
 ```
 
@@ -116,7 +115,6 @@ Failed to verify reading basic at VerifyData.checksum
 ```
 
 Inheritance is also supported
-
 
 ## ASN.1 Helpers
 
@@ -139,8 +137,7 @@ ber.tag_class # => ASN1::BER::TagClass::Universal
 
 ```
 
-
-## Real World Examples:
+## Real World Examples
 
 * ASN.1
   * https://github.com/crystal-community/jwt/blob/master/src/jwt.cr#L251

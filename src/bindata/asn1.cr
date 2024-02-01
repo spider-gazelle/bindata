@@ -13,8 +13,8 @@ module ASN1
     endian big
 
     # Components of a BER object
-    custom identifier : Identifier = Identifier.new
-    custom length : Length = Length.new
+    field identifier : Identifier = Identifier.new
+    field length : Length = Length.new
     property payload : Bytes = Bytes.new(0)
 
     def tag_class

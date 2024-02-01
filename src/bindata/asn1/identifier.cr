@@ -19,7 +19,7 @@ class ASN1::BER < BinData
     endian big
 
     bit_field do
-      enum_bits 2, tag_class : TagClass = TagClass::Universal
+      bits 2, tag_class : TagClass = TagClass::Universal
       bool constructed, default: false
       bits 5, :tag_number
     end

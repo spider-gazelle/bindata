@@ -19,7 +19,7 @@ abstract class BinData
     {% method_name = custom_type.gsub(/::/, "_").underscore.id %}
       {% unless RESERVED_NAMES.includes? method_name.stringify %}
         macro {{ method_name }}(name, onlyif = nil, verify = nil, value = nil)
-          custom \{{name.id}} : {{custom_type}} = {{ custom_type }}.new
+          field \{{name.id}} : {{custom_type}} = {{ custom_type }}.new
         end
       {% end %}
     {% end %}
@@ -139,12 +139,12 @@ abstract class BinData
             @{{part[:name]}} = [] of {{part[:cls]}}
             loop do
               # Stop if the callback indicates there is no more
-              break unless ({{part[:length]}}).call
+              break unless ({{part[:read_next]}}).call
               @{{part[:name]}} << io.read_bytes({{part[:cls]}}, %endian)
             end
 
           {% elsif part[:type] == "enum" %}
-            @{{part[:name]}} = {{part[:encoding]}}.from_value(io.read_bytes({{part[:cls]}}, %endian))
+            @{{part[:name]}} = {{part[:enum_type]}}.from_value(io.read_bytes({{part[:cls]}}, %endian))
 
           {% elsif part[:type] == "group" %}
             @{{part[:name]}} = {{part[:cls]}}.new
@@ -272,7 +272,7 @@ abstract class BinData
             end
 
           {% elsif part[:type] == "enum" %}
-            %value = {{part[:cls]}}.new(@{{part[:name]}}.to_i)
+            %value = {{part[:cls]}}.new(@{{part[:name]}}.value)
             io.write_bytes(%value, %endian)
 
           {% elsif part[:type] == "group" %}
@@ -342,36 +342,24 @@ abstract class BinData
     end
   end
 
-  {% for vartype in ["UInt8", "Int8", "UInt16", "Int16", "UInt32", "Int32", "UInt64", "Int64", "UInt128", "Int128", "Float32", "Float64"] %}
-    {% name = vartype.downcase.id %}
-
-    macro {{name}}(name, onlyif = nil, verify = nil, value = nil, default = nil)
-      \{% PARTS << {type: "basic", name: name.id, cls: {{vartype.id}}, onlyif: onlyif, verify: verify, value: value} %}
-      property \{{name.id}} : {{vartype.id}} = \{% if default %} {{vartype.id}}.new(\{{default}}) \{% else %} 0 \{% end %}
-    end
-
-    macro {{name}}be(name, onlyif = nil, verify = nil, value = nil, default = nil)
-    \{% PARTS << {type: "basic", name: name.id, cls: {{vartype.id}}, onlyif: onlyif, verify: verify, value: value, endian: IO::ByteFormat::BigEndian} %}
-    property \{{name.id}} : {{vartype.id}} = \{% if default %} {{vartype.id}}.new(\{{default}}) \{% else %} 0 \{% end %}
-    end
-
-    macro {{name}}le(name, onlyif = nil, verify = nil, value = nil, default = nil)
-    \{% PARTS << {type: "basic", name: name.id, cls: {{vartype.id}}, onlyif: onlyif, verify: verify, value: value, endian: IO::ByteFormat::LittleEndian} %}
-    property \{{name.id}} : {{vartype.id}} = \{% if default %} {{vartype.id}}.new(\{{default}}) \{% else %} 0 \{% end %}
-    end
-  {% end %}
-
-  macro string(name, onlyif = nil, verify = nil, length = nil, value = nil, encoding = nil, default = nil)
-    {% PARTS << {type: "string", name: name.id, cls: "String".id, onlyif: onlyif, verify: verify, length: length, value: value, encoding: encoding} %}
-    property {{name.id}} : String = {% if default %} {{default}}.to_s {% else %} "" {% end %}
-  end
-
-  macro bytes(name, length, onlyif = nil, verify = nil, value = nil, default = nil)
-    {% PARTS << {type: "bytes", name: name.id, cls: "Bytes".id, onlyif: onlyif, verify: verify, length: length, value: value} %}
-    property {{name.id}} : Bytes = {% if default %} {{default}}.to_slice {% else %} Bytes.new(0) {% end %}
-  end
-
   macro bits(size, name, value = nil, default = nil)
+    {% resolved_type = nil %}
+
+    {% if name.is_a?(TypeDeclaration) %}
+      {% if name.value %}
+        {% default = name.value %}
+      {% end %}
+      {% if name.type %}
+        {% resolved_type = name.type.resolve %}
+      {% end %}
+      {% name = name.var %}
+    {% elsif name.is_a?(Assign) %}
+      {% if name.value %}
+        {% default = name.value %}
+      {% end %}
+      {% name = name.target %}
+    {% end %}
+
     %field = @@bit_fields["{{KLASS_NAME[0]}}_{{INDEX[0]}}"]?
     raise "#{KLASS_NAME[0]}#{ '#' }{{name}} is not defined in a bitfield. Using bitfield macro outside of a bitfield" unless %field
     %field.bits({{size}}, {{name.id.stringify}})
@@ -394,27 +382,37 @@ abstract class BinData
     {% else %}
       {{ "bits greater than 128 are not supported".id }}
     {% end %}
+
+    {% if resolved_type && resolved_type < Enum %}
+      def {{name.id}} : {{resolved_type}}
+        {{resolved_type}}.from_value(@{{name.id}})
+      end
+
+      def {{name.id}}=(value : {{resolved_type}})
+        # Ensure the correct type is being assigned
+        @{{name.id}} = @{{name.id}}.class.new(0) | value.value
+      end
+    {% end %}
   end
 
+  @[Deprecated("Use `#bits` instead")]
   macro enum_bits(size, name)
-    {% if name.value %}
-      bits({{size}}, {{name.var}}, default: {{name.value}}.to_i)
-    {% else %}
-      bits({{size}}, {{name.var}})
+    {% if name.is_a?(SymbolLiteral) %}
+      {% name = name.stringify[1..-1].id %}
     {% end %}
 
-    def {{name.var}} : {{name.type}}
-      {{name.type}}.new(@{{name.var}}.to_i)
-    end
-
-    def {{name.var}}=(value : {{name.type}})
-      # Ensure the correct type is being assigned
-      @{{name.var}} = @{{name.var}}.class.new(0) | value.to_i
-    end
+    bits {{size}}, {{name}}
   end
 
   macro bool(name, default = false)
-    bits(1, {{name.id}}, default: ({{default}} ? 1 : 0) )
+    {% if name.is_a?(Assign) %}
+      {% if name.value %}
+        {% default = name.value %}
+      {% end %}
+      {% name = name.target %}
+    {% end %}
+
+    bits(1, {{name}}, default: ({{default}} ? 1 : 0))
 
     def {{name.id}} : Bool
       @{{name.id}} == 1
@@ -435,26 +433,6 @@ abstract class BinData
 
     %bitfield.apply
     {% PARTS << {type: "bitfield", name: INDEX[0], cls: KLASS_NAME[0], onlyif: onlyif, verify: verify} %}
-  end
-
-  macro custom(name, onlyif = nil, verify = nil, value = nil)
-    {% PARTS << {type: "basic", name: name.var, cls: name.type, onlyif: onlyif, verify: verify, value: value} %}
-    property {{name.id}}
-  end
-
-  macro enum_field(size, name, onlyif = nil, verify = nil, value = nil)
-    {% PARTS << {type: "enum", name: name.var, cls: size, onlyif: onlyif, verify: verify, value: value, encoding: name.type} %}
-    property {{name.id}}
-  end
-
-  macro array(name, length, onlyif = nil, verify = nil, value = nil)
-    {% PARTS << {type: "array", name: name.var, cls: name.type, onlyif: onlyif, verify: verify, length: length, value: value} %}
-    property {{name.var}} : Array({{name.type}}) = {% if name.value %} {{name.value}} {% else %} [] of {{name.type}} {% end %}
-  end
-
-  macro variable_array(name, read_next, onlyif = nil, verify = nil, value = nil)
-    {% PARTS << {type: "variable_array", name: name.var, cls: name.type, onlyif: onlyif, verify: verify, length: read_next, value: value} %}
-    property {{name.var}} : Array({{name.type}}) = {% if name.value %} {{name.value}} {% else %} [] of {{name.type}} {% end %}
   end
 
   # }# Encapsulates a bunch of fields by creating a nested BinData class
@@ -478,6 +456,109 @@ abstract class BinData
 
   macro remaining_bytes(name, onlyif = nil, verify = nil, default = nil)
     {% REMAINING << {type: "bytes", name: name.id, onlyif: onlyif, verify: verify} %}
+    property {{name.id}} : Bytes = {% if default %} {{default}}.to_slice {% else %} Bytes.new(0) {% end %}
+  end
+
+  # this needs to be split out so we can resolve the enum base_type
+  macro __add_enum_field(name, cls, onlyif, verify, value, encoding, enum_type)
+    {% PARTS << {type: "enum", name: name, cls: cls, onlyif: onlyif, verify: verify, value: value, encoding: encoding, enum_type: enum_type} %}
+  end
+
+  macro field(type_declaration, onlyif = nil, verify = nil, value = nil, length = nil, read_next = nil, encoding = nil, endian = nil)
+    {% if !type_declaration.is_a?(TypeDeclaration) %}
+      {% raise "#{type_declaration} must be a TypeDeclaration" %}
+    {% end %}
+
+    {% resolved_type = type_declaration.type.resolve %}
+    {% default = type_declaration.value %}
+    {% name = type_declaration.var %}
+
+    {% if {Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, Float32, Float64}.includes? resolved_type %}
+      {% PARTS << {type: "basic", name: name, cls: resolved_type, onlyif: onlyif, verify: verify, value: value, endian: endian} %}
+      property {{name.id}} : {{resolved_type}} = {% if default %} {{resolved_type}}.new({{default}}) {% else %} 0 {% end %}
+    {% elsif resolved_type == String %}
+      {% PARTS << {type: "string", name: name, cls: resolved_type, onlyif: onlyif, verify: verify, length: length, value: value, encoding: encoding} %}
+      property {{name.id}} : String = {% if default %} {{default}} {% else %} "" {% end %}
+    {% elsif {Bytes, Slice(UInt8)}.includes? resolved_type %}
+      {% PARTS << {type: "bytes", name: name, cls: resolved_type, onlyif: onlyif, verify: verify, length: length, value: value} %}
+      {% raise "Bytes fields require a length callback" unless length %}
+      property {{name.id}} : Bytes = {% if default %} {{default}}.to_slice {% else %} Bytes.new(0) {% end %}
+    {% elsif resolved_type < Enum %}
+      property {{type_declaration}}
+      {% raise "Enum fields require a default value to be provided" unless default %}
+      __add_enum_field name: {{name}}, cls: typeof({{default}}.value), onlyif: {{onlyif}}, verify: {{verify}}, value: {{value}}, encoding: {{encoding}}, enum_type: {{resolved_type}}
+    {% elsif resolved_type <= Array || resolved_type <= Set %}
+      {% if length %}
+        {% PARTS << {type: "array", name: name, cls: resolved_type.type_vars[0], onlyif: onlyif, verify: verify, length: length, value: value} %}
+      {% elsif read_next %}
+        {% PARTS << {type: "variable_array", name: name, cls: resolved_type.type_vars[0], onlyif: onlyif, verify: verify, read_next: read_next, value: value} %}
+      {% else %}
+        {% raise "Array and Set fields require a length callback or read_next callback" %}
+      {% end %}
+      property {{name.id}} : {{resolved_type}} = {% if default %} {{default}} {% else %} {{resolved_type}}.new {% end %}
+    {% else %}
+      {% PARTS << {type: "basic", name: name, cls: resolved_type, onlyif: onlyif, verify: verify, value: value} %}
+      property {{type_declaration}}
+    {% end %}
+  end
+
+  # deprecated:
+
+  @[Deprecated("Use `#field` instead")]
+  macro custom(name, onlyif = nil, verify = nil, value = nil)
+    {% PARTS << {type: "basic", name: name.var, cls: name.type, onlyif: onlyif, verify: verify, value: value} %}
+    property {{name.id}}
+  end
+
+  @[Deprecated("Use `#field` instead")]
+  macro enum_field(size, name, onlyif = nil, verify = nil, value = nil)
+    {% PARTS << {type: "enum", name: name.var, cls: size, onlyif: onlyif, verify: verify, value: value, enum_type: name.type} %}
+    property {{name.id}}
+  end
+
+  @[Deprecated("Use `#field` instead")]
+  macro array(name, length, onlyif = nil, verify = nil, value = nil)
+    {% PARTS << {type: "array", name: name.var, cls: name.type, onlyif: onlyif, verify: verify, length: length, value: value} %}
+    property {{name.var}} : Array({{name.type}}) = {% if name.value %} {{name.value}} {% else %} [] of {{name.type}} {% end %}
+  end
+
+  @[Deprecated("Use `#field` instead")]
+  macro variable_array(name, read_next, onlyif = nil, verify = nil, value = nil)
+    {% PARTS << {type: "variable_array", name: name.var, cls: name.type, onlyif: onlyif, verify: verify, read_next: read_next, value: value} %}
+    property {{name.var}} : Array({{name.type}}) = {% if name.value %} {{name.value}} {% else %} [] of {{name.type}} {% end %}
+  end
+
+  {% for vartype in ["UInt8", "Int8", "UInt16", "Int16", "UInt32", "Int32", "UInt64", "Int64", "UInt128", "Int128", "Float32", "Float64"] %}
+    {% name = vartype.downcase.id %}
+
+    @[Deprecated("Use `#field` instead")]
+    macro {{name}}(name, onlyif = nil, verify = nil, value = nil, default = nil)
+      \{% PARTS << {type: "basic", name: name.id, cls: {{vartype.id}}, onlyif: onlyif, verify: verify, value: value} %}
+      property \{{name.id}} : {{vartype.id}} = \{% if default %} {{vartype.id}}.new(\{{default}}) \{% else %} 0 \{% end %}
+    end
+
+    @[Deprecated("Use `#field` instead")]
+    macro {{name}}be(name, onlyif = nil, verify = nil, value = nil, default = nil)
+      \{% PARTS << {type: "basic", name: name.id, cls: {{vartype.id}}, onlyif: onlyif, verify: verify, value: value, endian: IO::ByteFormat::BigEndian} %}
+      property \{{name.id}} : {{vartype.id}} = \{% if default %} {{vartype.id}}.new(\{{default}}) \{% else %} 0 \{% end %}
+    end
+
+    @[Deprecated("Use `#field` instead")]
+    macro {{name}}le(name, onlyif = nil, verify = nil, value = nil, default = nil)
+      \{% PARTS << {type: "basic", name: name.id, cls: {{vartype.id}}, onlyif: onlyif, verify: verify, value: value, endian: IO::ByteFormat::LittleEndian} %}
+      property \{{name.id}} : {{vartype.id}} = \{% if default %} {{vartype.id}}.new(\{{default}}) \{% else %} 0 \{% end %}
+    end
+  {% end %}
+
+  @[Deprecated("Use `#field` instead")]
+  macro string(name, onlyif = nil, verify = nil, length = nil, value = nil, encoding = nil, default = nil)
+    {% PARTS << {type: "string", name: name.id, cls: "String".id, onlyif: onlyif, verify: verify, length: length, value: value, encoding: encoding} %}
+    property {{name.id}} : String = {% if default %} {{default}}.to_s {% else %} "" {% end %}
+  end
+
+  @[Deprecated("Use `#field` instead")]
+  macro bytes(name, length, onlyif = nil, verify = nil, value = nil, default = nil)
+    {% PARTS << {type: "bytes", name: name.id, cls: "Bytes".id, onlyif: onlyif, verify: verify, length: length, value: value} %}
     property {{name.id}} : Bytes = {% if default %} {{default}}.to_slice {% else %} Bytes.new(0) {% end %}
   end
 end

@@ -53,5 +53,5 @@ class Packet < BinData
     Reply   = 0x0111
   end
 
-  enum_field UInt16, type : Type = Type::Command
+  field type : Type = Type::Command
 end
