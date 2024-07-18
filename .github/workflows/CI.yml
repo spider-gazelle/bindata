@@ -24,7 +24,7 @@ jobs:
         sudo apt-get install -y locales
         sudo locale-gen zh_CN.GB2312
     - name: Install dependencies
-      run: shards install --ignore-crystal-version
+      run: shards install --ignore-crystal-version --skip-postinstall --skip-executables
     - name: Format
       run: crystal tool format --check
     - name: Run tests
