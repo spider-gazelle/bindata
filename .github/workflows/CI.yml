@@ -19,10 +19,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Add encodings
-      run: |
-        apt-get update
-        apt-get install -y locales
-        locale-gen zh_CN.GB2312
+      run: apk --no-cache add musl-locales musl-locales-lang
     - name: Install dependencies
       run: shards install --ignore-crystal-version --skip-postinstall --skip-executables
     - name: Format
