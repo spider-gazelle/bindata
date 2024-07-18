@@ -22,7 +22,8 @@ jobs:
       run: |
         apt-get update
         apt-get install -y locales
-        locale-gen zh_CN.GB2312
+        sed -i 's/^# \(.*\)$/\1/' /etc/locale.gen
+        locale-gen
     - name: Install dependencies
       run: shards install --ignore-crystal-version --skip-postinstall --skip-executables
     - name: Format
