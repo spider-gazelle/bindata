@@ -15,7 +15,7 @@ jobs:
           - latest
           - nightly
     runs-on: ${{ matrix.os }}
-    container: crystallang/crystal:${{ matrix.crystal }}-ubuntu
+    container: crystallang/crystal:${{ matrix.crystal }}
     steps:
     - uses: actions/checkout@v2
     - name: Add encodings
