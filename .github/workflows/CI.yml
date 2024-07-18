@@ -15,11 +15,14 @@ jobs:
           - latest
           - nightly
     runs-on: ${{ matrix.os }}
-    container: crystallang/crystal:${{ matrix.crystal }}-alpine
+    container: crystallang/crystal:${{ matrix.crystal }}-ubuntu
     steps:
     - uses: actions/checkout@v2
     - name: Add encodings
-      run: apk --no-cache add musl-locales musl-locales-lang
+      run: |
+        apt-get update
+        apt-get install -y locales
+        locale-gen zh_CN.GB2312
     - name: Install dependencies
       run: shards install --ignore-crystal-version --skip-postinstall --skip-executables
     - name: Format
