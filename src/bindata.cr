@@ -166,7 +166,11 @@ abstract class BinData
               %size = ({{part[:length]}}).call.not_nil!
               %buf = Bytes.new(%size)
               io.read_fully(%buf)
-              @{{part[:name]}} = String.new(%buf)
+              {% if part[:encoding] %}
+                @{{part[:name]}} = String.new(%buf, {{ part[:encoding] }})
+              {% else %}
+                @{{part[:name]}} = String.new(%buf)
+              {% end %}
             {% else %}
               # Assume the string is 0 terminated
               @{{part[:name]}} = (io.gets('\0') || "")[0..-2]
@@ -305,7 +309,12 @@ abstract class BinData
             io.write(@{{part[:name]}})
 
           {% elsif part[:type] == "string" %}
-            io.write(@{{part[:name]}}.to_slice)
+            {% if part[:encoding] %}
+              io.write(@{{part[:name]}}.encode({{ part[:encoding] }}))
+            {% else %}
+              io.write(@{{part[:name]}}.to_slice)
+            {% end %}
+            
             {% if !part[:length] %}
               io.write_byte(0_u8)
             {% end %}
@@ -499,6 +508,9 @@ abstract class BinData
       {% PARTS << {type: "basic", name: name, cls: resolved_type, onlyif: onlyif, verify: verify, value: value, endian: endian} %}
       property {{name.id}} : {{resolved_type}} = {% if default %} {{resolved_type}}.new({{default}}) {% else %} 0 {% end %}
     {% elsif resolved_type == String %}
+      {% if encoding %}
+        {% raise "String fields require a length for alternative encodings, #{name} (#{encoding})" unless length %}
+      {% end %}
       {% PARTS << {type: "string", name: name, cls: resolved_type, onlyif: onlyif, verify: verify, length: length, value: value, encoding: encoding} %}
       property {{name.id}} : String = {% if default %} {{default}} {% else %} "" {% end %}
     {% elsif {Bytes, Slice(UInt8)}.includes? resolved_type %}
@@ -507,7 +519,7 @@ abstract class BinData
       property {{name.id}} : Bytes = {% if default %} {{default}}.to_slice {% else %} Bytes.new(0) {% end %}
     {% elsif resolved_type < Enum %}
       property {{type_declaration}}
-      {% raise "Enum fields require a default value to be provided" unless default %}
+      {% raise "Enum fields require a default value to be provided (#{name})" unless default %}
       __add_enum_field name: {{name}}, cls: typeof({{default}}.value), onlyif: {{onlyif}}, verify: {{verify}}, value: {{value}}, encoding: {{encoding}}, enum_type: {{resolved_type}}
     {% elsif resolved_type <= Array || resolved_type <= Set %}
       {% if length %}
