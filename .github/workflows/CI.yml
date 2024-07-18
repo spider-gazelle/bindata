@@ -18,6 +18,11 @@ jobs:
     container: crystallang/crystal:${{ matrix.crystal }}-alpine
     steps:
     - uses: actions/checkout@v2
+    - name: Add encodings
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y locales
+        sudo locale-gen zh_CN.GB2312
     - name: Install dependencies
       run: shards install --ignore-crystal-version
     - name: Format
