@@ -13,6 +13,8 @@ abstract class BinData
     ENDIAN = ["system"]
     KLASS_NAME = [{{@type.name.id}}]
     REMAINING = [] of Nil
+    BEFORE_SERIALIZE = [] of Nil
+    AFTER_DESERIALIZE = [] of Nil
     {% BinData::CUSTOM_TYPES << @type.name.id %}
 
     {% for custom_type in BinData::CUSTOM_TYPES %}
@@ -218,12 +220,32 @@ abstract class BinData
         raise ParseError.new "{{@type.id}}", "#{part_name}", error
       end
 
+      begin
+        {% for callback in AFTER_DESERIALIZE %}
+          begin
+            {{ callback.body }}
+          end
+        {% end %}
+      rescue error
+        raise RuntimeError.new("error in after deserialize callback", cause: error)
+      end
+
       io
     end
 
     protected def __perform_write__(io : IO) : IO
       # Support inheritance
       super(io)
+
+      begin
+        {% for callback in BEFORE_SERIALIZE %}
+          begin
+            {{ callback.body }}
+          end
+        {% end %}
+      rescue error
+        raise RuntimeError.new("error in before serialize callback", cause: error)
+      end
 
       part_name = ""
 
@@ -500,6 +522,14 @@ abstract class BinData
       {% PARTS << {type: "basic", name: name, cls: resolved_type, onlyif: onlyif, verify: verify, value: value} %}
       property {{type_declaration}}
     {% end %}
+  end
+
+  macro before_serialize(&block)
+    {% BEFORE_SERIALIZE << block %}
+  end
+
+  macro after_deserialize(&block)
+    {% AFTER_DESERIALIZE << block %}
   end
 
   # deprecated:
