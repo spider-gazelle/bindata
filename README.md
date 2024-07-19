@@ -116,6 +116,23 @@ Failed to verify reading basic at VerifyData.checksum
 
 Inheritance is also supported
 
+## Callbacks
+
+Callbacks can helpful for providing accessors for simplified representations of the data.
+
+```crystal
+class CallbackTest < BinData
+  endian little
+
+  field integer : UInt8
+
+  property external_representation : UInt16 = 0
+
+  before_serialize { self.integer = (external_representation // 2).to_u8 }
+  after_deserialize { self.external_representation = integer.to_u16 * 2_u16 }
+end
+```
+
 ## ASN.1 Helpers
 
 Included in this library are helpers for decoding and writing ASN.1 data, such as those used in SNMP and LDAP
