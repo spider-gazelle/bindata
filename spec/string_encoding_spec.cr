@@ -3,7 +3,7 @@ require "./helper"
 class StrEncodingTest < BinData
   endian little
 
-  field str : String, encoding: "GB2312", length: ->{ 2 }
+  field str : String, encoding: "GB2312", length: -> { 2 }
 end
 
 describe "string encoding" do
