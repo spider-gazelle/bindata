@@ -99,6 +99,10 @@ abstract class BinData
     data
   end
 
+  def to_s(io)
+    inspect(io)
+  end
+
   macro __build_methods__
     protected def __perform_read__(io : IO) : IO
       # Support inheritance
@@ -314,7 +318,7 @@ abstract class BinData
             {% else %}
               io.write(@{{part[:name]}}.to_slice)
             {% end %}
-            
+
             {% if !part[:length] %}
               io.write_byte(0_u8)
             {% end %}
