@@ -2,11 +2,33 @@ require "./bindata/exceptions"
 require "./bindata/bitfield"
 
 abstract class BinData
-  INDEX          = [-1]
-  BIT_PARTS      = [] of Nil
-  CUSTOM_TYPES   = [] of BinData.class
-  RESERVED_NAMES = ["inherited", "included", "extended", "method_missing",
-                    "method_added", "finished"]
+  INDEX        = [-1]
+  BIT_PARTS    = [] of Nil
+  CUSTOM_TYPES = [] of BinData.class
+  # Names the per-type shortcut macro (generated in `inherited`) must never take,
+  # otherwise defining a subclass whose underscored name matches one of these
+  # would clobber a Crystal hook, a DSL macro, or a public method globally.
+  #
+  # NOTE: when adding a new DSL macro to this class, add its name here too,
+  # otherwise a subclass named after it will silently clobber it.
+  RESERVED_NAMES = [
+    # Crystal hooks / object protocol
+    "inherited", "included", "extended", "method_missing", "method_added", "finished",
+    "new", "inspect",
+    # public (de)serialization API
+    "read", "write", "to_io", "from_io", "to_slice", "from_slice", "to_s", "bit_fields", "parent",
+    # DSL macros
+    "endian", "field", "bits", "enum_bits", "bool", "bit_field", "group",
+    "remaining_bytes", "before_serialize", "after_deserialize",
+    "custom", "enum_field", "array", "variable_array", "string", "bytes",
+    # deprecated per-type field macros (uintN / intN / floatN and their be/le forms)
+    "uint8", "uint8be", "uint8le", "int8", "int8be", "int8le",
+    "uint16", "uint16be", "uint16le", "int16", "int16be", "int16le",
+    "uint32", "uint32be", "uint32le", "int32", "int32be", "int32le",
+    "uint64", "uint64be", "uint64le", "int64", "int64be", "int64le",
+    "uint128", "uint128be", "uint128le", "int128", "int128be", "int128le",
+    "float32", "float32be", "float32le", "float64", "float64be", "float64le",
+  ]
 
   macro inherited
     PARTS = [] of Nil
