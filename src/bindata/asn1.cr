@@ -12,10 +12,24 @@ module ASN1
   class BER < BinData
     endian big
 
+    # Raised when a declared content length exceeds `max_content_length`.
+    class ContentTooLarge < Exception
+    end
+
     # Components of a BER object
     field identifier : Identifier = Identifier.new
     field length : Length = Length.new
     property payload : Bytes = Bytes.new(0)
+
+    # Maximum number of payload bytes this object (and its children) may
+    # allocate or read. `0`, the default, means unlimited. Set a positive cap
+    # before reading untrusted input to guard against allocation/exhaustion DoS,
+    # reading the root explicitly so the cap is in place before parsing:
+    #
+    #     ber = ASN1::BER.new
+    #     ber.max_content_length = 64 * 1024
+    #     ber.read(io)
+    property max_content_length : Int32 = 0
 
     def tag_class
       @identifier.tag_class
@@ -72,6 +86,7 @@ module ASN1
           current_byte = io.read_byte.not_nil!
           break if previous_byte == 0_u8 && current_byte == 0_u8
           temp.write_byte previous_byte
+          ensure_content_length(temp.pos)
           previous_byte = current_byte
         end
 
@@ -79,6 +94,8 @@ module ASN1
         temp.rewind
         temp.read_fully(@payload)
       else
+        # Guard before allocating: the declared length is attacker-controlled.
+        ensure_content_length(@length.length)
         begin
           @payload = Bytes.new(@length.length)
           io.read_fully(@payload)
@@ -88,6 +105,13 @@ module ASN1
         end
       end
       io
+    end
+
+    private def ensure_content_length(size)
+      return if @max_content_length <= 0
+      if size > @max_content_length
+        raise ContentTooLarge.new("ASN.1 content length #{size} exceeds max_content_length #{@max_content_length}")
+      end
     end
 
     def write(io : IO)
@@ -110,7 +134,11 @@ module ASN1
       parts = [] of BER
       io = IO::Memory.new(@payload)
       while io.pos < io.size
-        parts << io.read_bytes(ASN1::BER)
+        # Propagate the cap so a small frame can't smuggle an oversized child.
+        child = BER.new
+        child.max_content_length = @max_content_length
+        child.read(io)
+        parts << child
       end
       parts
     end
