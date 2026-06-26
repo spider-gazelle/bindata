@@ -138,6 +138,18 @@ abstract class BinData
     inspect(io)
   end
 
+  # Validates a `length:` / `skip` callback result before it is used to allocate
+  # a buffer or advance the cursor. The value is typically derived from an
+  # attacker-controlled wire field; a negative size would otherwise silently read
+  # zero elements (`array`) or move the cursor backwards (`skip`), desyncing the
+  # stream. Raised errors are wrapped in `ParseError` with the field name.
+  protected def __read_length__(value) : Int32
+    raise ArgumentError.new("length/skip callback returned nil") if value.nil?
+    size = value.to_i
+    raise ArgumentError.new("length/skip callback returned a negative value: #{size}") if size < 0
+    size
+  end
+
   macro __build_methods__
     protected def __perform_read__(io : IO) : IO
       # Support inheritance
@@ -170,7 +182,7 @@ abstract class BinData
             {% end %}
 
           {% elsif part[:type] == "array" %}
-            %size = ({{part[:length]}}).call.not_nil!
+            %size = __read_length__(({{part[:length]}}).call)
             @{{part[:name]}} = [] of {{part[:cls]}}
             (0...%size).each do
               @{{part[:name]}} << io.read_bytes({{part[:cls]}}, %endian)
@@ -194,7 +206,7 @@ abstract class BinData
 
           {% elsif part[:type] == "bytes" %}
             # There is a length calculation
-            %size = ({{part[:length]}}).call.not_nil!
+            %size = __read_length__(({{part[:length]}}).call)
             %buf = Bytes.new(%size)
             io.read_fully(%buf)
             @{{part[:name]}} = %buf
@@ -202,7 +214,7 @@ abstract class BinData
           {% elsif part[:type] == "string" %}
             {% if part[:length] %}
               # There is a length calculation
-              %size = ({{part[:length]}}).call.not_nil!
+              %size = __read_length__(({{part[:length]}}).call)
               %buf = Bytes.new(%size)
               io.read_fully(%buf)
               {% if part[:encoding] %}
@@ -227,7 +239,7 @@ abstract class BinData
 
           {% elsif part[:type] == "skip" %}
             # advance past the bytes without storing them
-            io.skip(({{part[:length]}}).call)
+            io.skip(__read_length__(({{part[:length]}}).call))
           {% end %}
 
           {% if part[:onlyif] %}
