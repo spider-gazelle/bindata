@@ -198,6 +198,11 @@ class ASN1::BER < BinData
     raise InvalidTag.new("object is a #{tag}, expecting one of #{check_tags}") unless check_tags.includes?(tag)
     return 0_i64 if @payload.size == 0
 
+    # An INTEGER wider than 8 bytes cannot be represented in the Int64 this
+    # returns; the bit-shift below would reach a shift count of 64+ (which is 0
+    # in Crystal) and silently mis-decode. Reject it instead.
+    raise InvalidPayload.new("INTEGER content of #{@payload.size} bytes exceeds Int64 range") if @payload.size > 8
+
     # Check if first bit is set indicating negativity
     negative = (@payload[0] & 0x80) > 0
     reverse_index = @payload.size - 1
@@ -217,7 +222,9 @@ class ASN1::BER < BinData
       reverse_index -= 1
     end
 
-    return -(start + 1) if negative
+    # `-start - 1`, not `-(start + 1)`: for Int64::MIN the magnitude `start`
+    # reaches Int64::MAX, so `start + 1` would overflow before the negation.
+    return -start - 1 if negative
     start
   end
 
@@ -274,11 +281,20 @@ class ASN1::BER < BinData
     # ensure there is at least one byte
     bytes.write_byte(negative ? 0xFF_u8 : 0x00_u8) if bytes.size == 0
 
-    # Make sure positive integers don't start with 0xFF
+    # Preserve the sign bit. A positive value whose top bit is set needs a 0x00
+    # pad so it doesn't decode as negative; symmetrically, a negative value whose
+    # top bit is clear needs a 0xFF pad so it doesn't decode as positive (e.g.
+    # -129 is 0xFF 0x7F, not 0x7F). Without the negative pad, stripping the
+    # leading 0xFF sign bytes above flips the sign.
     payload_bytes = bytes.to_slice
-    if !negative && (payload_bytes[0] & 0b10000000) > 0
+    pad = if !negative && (payload_bytes[0] & 0x80) > 0
+            0x00_u8
+          elsif negative && (payload_bytes[0] & 0x80) == 0
+            0xFF_u8
+          end
+    if pad
       io = IO::Memory.new
-      io.write_bytes 0x00_u8
+      io.write_byte pad
       io.write payload_bytes
       payload_bytes = io.to_slice
     end
