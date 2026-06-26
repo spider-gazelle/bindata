@@ -26,6 +26,7 @@ Then you can specify the structures fields. There are a few different field type
 3. Bit Fields
    * a group of fields whose values are defined by the number of bits used to represent them
    * the total number of bits in a bit field must be divisible by 8
+   * they follow the class `endian` (`little` byte-swaps the bitfield); override per field with `bit_field endian: :little`/`:big`
 4. Groups
    * an embedded `BinData` class with access to the parent fields
    * useful when a group of fields are related or optional

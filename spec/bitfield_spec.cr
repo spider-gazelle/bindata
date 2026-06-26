@@ -16,7 +16,7 @@ describe BinData::BitField do
     bf.bits 23, :three
     bf.apply
 
-    values = bf.read(io, IO::ByteFormat::LittleEndian)
+    values = bf.read(io, IO::ByteFormat::BigEndian)
     values["seven"].should eq(0b1110111)
     values["two"].should eq(0b01)
     values["three"].should eq(0)
