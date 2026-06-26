@@ -1,0 +1,28 @@
+# Ameba configuration for bindata.
+#
+# The rules disabled here are either false positives produced by the BinData
+# macro DSL or intentional, documented naming choices — not real issues.
+
+Lint/UselessAssign:
+  # The `field` / `bits` / `bool` / `group` DSL macros expand to declarations
+  # that ameba reads as useless local assignments (`field x : T`, `bits 8, :y`).
+  # Pervasive false positive across every file that uses the DSL.
+  Enabled: false
+
+Naming/AccessorMethodName:
+  # The ASN.1 BER `get_*` / `set_*` accessors deliberately mirror the wire-format
+  # vocabulary (get_object_id, set_integer, ...); they are not Crystal getters.
+  Enabled: false
+
+Naming/BlockParameterName:
+  # Short index/loop block parameters (e.g. `f`) are idiomatic in the specs.
+  Enabled: false
+
+Documentation/DocumentationAdmonition:
+  # TODO / NOTE comments are allowed as in-code project notes.
+  Enabled: false
+
+Lint/SpecFilename:
+  Excluded:
+    # Shared spec helper required by the suite, not a spec file itself.
+    - spec/helper.cr
