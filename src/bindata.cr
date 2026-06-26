@@ -550,8 +550,14 @@ abstract class BinData
   # bits declared in the block must be divisible by 8. Use only when fields share
   # a byte; byte-aligned values should be plain `field`s.
   #
+  # Bit fields follow the class `endian`: `little` byte-swaps the bitfield's bytes
+  # (the bitfield is read/written as a little-endian integer, fields taken from its
+  # most significant bit), while `big` / `network` / `system` / no declaration are
+  # big-endian. Pass `endian: :little` / `:big` to override a single bit field.
+  # Declare `endian` before the `bit_field` for the class default to apply.
+  #
   # Accepts the same *onlyif* / *verify* callbacks as `field`.
-  macro bit_field(onlyif = nil, verify = nil, &block)
+  macro bit_field(onlyif = nil, verify = nil, endian = nil, &block)
     {% INDEX[0] = INDEX[0] + 1 %}
     {% BIT_PARTS << {} of Nil => Nil %}
     %bitfield = @@bit_fields["{{KLASS_NAME[0]}}_{{INDEX[0]}}"] = BitField.new
@@ -559,7 +565,12 @@ abstract class BinData
     {{block.body}}
 
     %bitfield.apply
-    {% PARTS << {type: "bitfield", name: INDEX[0], cls: KLASS_NAME[0], onlyif: onlyif, verify: verify} %}
+    {% bf_endian = endian ? endian.id.stringify : ENDIAN[0] %}
+    {% if bf_endian == "little" %}
+      {% PARTS << {type: "bitfield", name: INDEX[0], cls: KLASS_NAME[0], onlyif: onlyif, verify: verify, endian: IO::ByteFormat::LittleEndian} %}
+    {% else %}
+      {% PARTS << {type: "bitfield", name: INDEX[0], cls: KLASS_NAME[0], onlyif: onlyif, verify: verify, endian: IO::ByteFormat::BigEndian} %}
+    {% end %}
   end
 
   # Declares a nested, isolated group of fields as its own `BinData` class.

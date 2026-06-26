@@ -67,10 +67,7 @@ class BinData::BitField
     values = {} of String => Value
     buffer = Bytes.new(@bitsize // 8)
     input.read_fully(buffer)
-
-    # TODO:: Check if we need to re-order the bytes
-    # if format == IO::ByteFormat::LittleEndian
-    # end
+    buffer.reverse! if format == IO::ByteFormat::LittleEndian
 
     @mappings.each do |name, size|
       # Read out the data we are after using this buffer
@@ -237,7 +234,9 @@ class BinData::BitField
       end
     end
 
-    io.write(buffer[0, bytes - 1])
+    wire = buffer[0, bytes - 1]
+    wire.reverse! if format == IO::ByteFormat::LittleEndian
+    io.write(wire)
 
     0_i64
   end
