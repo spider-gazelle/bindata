@@ -274,9 +274,10 @@ abstract class BinData
             %onlyif = ({{REMAINING[0][:onlyif]}}).call
             if %onlyif
           {% end %}
-          %buf = Bytes.new io.size - io.pos
-          io.read_fully %buf
-          @{{REMAINING[0][:name]}} = %buf
+          # read every remaining byte until EOF — works on streaming IOs that
+          # don't support `size` (e.g. sockets, pipes), and equals the rest of an
+          # `IO::Memory` buffer.
+          @{{REMAINING[0][:name]}} = io.getb_to_end
           {% if REMAINING[0][:onlyif] %}
             end
           {% end %}
@@ -602,9 +603,9 @@ abstract class BinData
     {% PARTS << {type: "group", name: name.id, cls: name.id.stringify.camelcase.id, onlyif: onlyif, verify: verify, value: value} %}
   end
 
-  # Reads every remaining byte of the `IO` into a `Bytes` field. Must be the last
-  # field, and requires a sized `IO` (e.g. `IO::Memory`). Accepts *onlyif* /
-  # *verify* callbacks.
+  # Reads every remaining byte of the `IO` (until EOF) into a `Bytes` field. Must
+  # be the last field. Works with any `IO`, including streaming ones (sockets,
+  # pipes). Accepts *onlyif* / *verify* callbacks.
   macro remaining_bytes(name, onlyif = nil, verify = nil, default = nil)
     {% REMAINING << {type: "bytes", name: name.id, onlyif: onlyif, verify: verify} %}
     property {{name.id}} : Bytes = {% if default %} {{default}}.to_slice {% else %} Bytes.new(0) {% end %}
