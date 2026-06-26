@@ -23,6 +23,11 @@ class ASN1::BER < BinData
   class Identifier < BinData
     endian big
 
+    # Cap on high-tag-number continuation bytes, to bound `read` against a stream
+    # of `more`-flagged bytes (otherwise the array grows without limit). 16
+    # base-128 bytes encode a tag number well beyond any real-world use.
+    MAX_EXTENDED_BYTES = 16
+
     bit_field do
       bits 2, tag_class : TagClass = TagClass::Universal
       bool constructed, default: false
@@ -40,6 +45,9 @@ class ASN1::BER < BinData
       if extended?
         @extended = [] of ExtendedIdentifier
         loop do
+          if @extended.size >= MAX_EXTENDED_BYTES
+            raise InvalidTag.new("extended identifier exceeds #{MAX_EXTENDED_BYTES} bytes")
+          end
           extended_id = io.read_bytes(ExtendedIdentifier)
           @extended << extended_id
           break unless extended_id.more
