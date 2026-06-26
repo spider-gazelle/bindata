@@ -204,11 +204,11 @@ abstract class BinData
 
           {% elsif part[:type] == "bitfield" %}
             %bitfield = self.class.bit_fields["{{part[:cls]}}_{{part[:name]}}"]
-            %bitfield.read(io, %endian)
+            %values = %bitfield.read(io, %endian)
 
             # Apply the values (with their correct type)
             {% for name, value in BIT_PARTS[part[:name]] %}
-              %value = %bitfield[{{name.id.stringify}}]
+              %value = %values[{{name.id.stringify}}]
               @{{name}} = %value.as({{value[0]}})
             {% end %}
           {% end %}
@@ -357,16 +357,17 @@ abstract class BinData
           {% elsif part[:type] == "bitfield" %}
             # Apply any values
             %bitfield = self.class.bit_fields["{{part[:cls]}}_{{part[:name]}}"]
+            %values = {} of String => BinData::BitField::Value
             {% for name, value in BIT_PARTS[part[:name]] %}
               {% if value[1] %}
                 %value = ({{value[1]}}).call
                 @{{name}} = %value || @{{name}}
               {% end %}
 
-              %bitfield[{{name.id.stringify}}] = @{{name}}.not_nil!
+              %values[{{name.id.stringify}}] = @{{name}}.not_nil!
             {% end %}
 
-            %bitfield.write(io, %endian)
+            %bitfield.write(io, %endian, %values)
           {% end %}
 
           {% if part[:onlyif] %}
