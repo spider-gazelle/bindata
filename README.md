@@ -19,19 +19,21 @@ end
 Then you can specify the structures fields. There are a few different field types:
 
 1. Core types
-   * `UInt8` to `UInt128` values respectively
-   * You can use endian-aware types to mix endianess: `, endian: IO::ByteFormat::LittleEndian`
+   * `UInt8` to `UInt128`, `Int8` to `Int128`, `Float32` and `Float64`
+   * mix endianness per field: `, endian: IO::ByteFormat::LittleEndian`
 2. Custom types
-   * anything that is [io serialisable](https://crystal-lang.org/api/0.27.2/IO.html#write_bytes%28object%2Cformat%3AIO%3A%3AByteFormat%3DIO%3A%3AByteFormat%3A%3ASystemEndian%29-instance-method)
+   * anything that is [`IO` serializable](https://crystal-lang.org/api/IO.html#write_bytes%28object%2Cformat%3AIO%3A%3AByteFormat%3DIO%3A%3AByteFormat%3A%3ASystemEndian%29-instance-method) (implements `to_io` / `from_io`)
 3. Bit Fields
-   * These are a group of fields who values are defined by the number of bits used to represent their value
-   * The total number of bits in a bit field must be divisible by 8
+   * a group of fields whose values are defined by the number of bits used to represent them
+   * the total number of bits in a bit field must be divisible by 8
 4. Groups
-   * These are embedded BinData class with access to the parent fields
-   * Useful when a group of fields are related or optional
+   * an embedded `BinData` class with access to the parent fields
+   * useful when a group of fields are related or optional
 5. Enums
 6. Bools
-6. Arrays and Sets (fixed size and dynamic)
+7. Arrays and Sets (fixed size and dynamic)
+8. Strings (null-terminated, or fixed-size with an optional `encoding:`)
+9. Raw `Bytes`
 
 
 ### Examples
@@ -135,24 +137,68 @@ end
 
 ## ASN.1 Helpers
 
-Included in this library are helpers for decoding and writing ASN.1 data, such as those used in SNMP and LDAP
+Included in this library are helpers for decoding and writing ASN.1 BER data, such as those used in SNMP, LDAP and X.509.
 
 ```crystal
 require "bindata/asn1"
 
-# Build an object
+# Build an element with one of the typed setters and write it to an IO
 ber = ASN1::BER.new
-ber.tag_number = ASN1::BER::UniversalTags::Integer
-ber.payload = Bytes[1]
-
-# Write it to an IO:
+ber.set_integer(42)
 io.write_bytes(ber)
 
-# Read data out of an IO:
+# Read it back, then decode with the matching getter
 ber = io.read_bytes(ASN1::BER)
-ber.tag_class # => ASN1::BER::TagClass::Universal
-
+ber.tag_class  # => ASN1::BER::TagClass::Universal
+ber.get_integer # => 42
 ```
+
+Typed payload accessors cover the common universal types:
+
+```crystal
+ber.set_integer(42);                  ber.get_integer    # => 42
+ber.set_string("hi");                 ber.get_string     # => "hi"
+ber.set_boolean(true);                ber.get_boolean    # => true
+ber.set_object_id("1.2.840.113549.1.1.1"); ber.get_object_id # round-trips
+ber.set_hexstring("00ff");            ber.get_hexstring  # => "00ff"
+```
+
+A constructed element (a Sequence or Set) can be split into / built from its children:
+
+```crystal
+seq = io.read_bytes(ASN1::BER)
+seq.children # => [ASN1::BER, ASN1::BER, ...]
+
+out = ASN1::BER.new
+out.tag_number = ASN1::BER::UniversalTags::Sequence
+out.children = [child1, child2]
+```
+
+When parsing untrusted input, set a `max_content_length` before reading so a hostile
+length field cannot force a huge allocation. The cap propagates to `children`.
+
+```crystal
+ber = ASN1::BER.new
+ber.max_content_length = 64 * 1024
+ber.read(io) # raises ASN1::BER::ContentTooLarge if any element exceeds the cap
+```
+
+## Errors
+
+Every (de)serialization error derives from `BinData::CustomException`, which carries the
+failing type and field:
+
+* `BinData::ParseError` / `BinData::WriteError` wrap any error hit while reading / writing a field
+* `BinData::VerificationException` is raised when a `verify:` callback returns `false`
+
+ASN.1 helpers raise `ASN1::BER::InvalidTag`, `ASN1::BER::InvalidObjectId` and
+`ASN1::BER::ContentTooLarge` for malformed input.
+
+## Thread safety
+
+A `BinData` instance is not shared between fibers, but reading and writing *different*
+instances of the same type concurrently is safe — the generated (de)serialization keeps no
+shared mutable state.
 
 ## Real World Examples
 
