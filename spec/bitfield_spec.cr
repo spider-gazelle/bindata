@@ -16,10 +16,10 @@ describe BinData::BitField do
     bf.bits 23, :three
     bf.apply
 
-    bf.read(io, IO::ByteFormat::LittleEndian)
-    bf[:seven].should eq(0b1110111)
-    bf[:two].should eq(0b01)
-    bf[:three].should eq(0)
+    values = bf.read(io, IO::ByteFormat::LittleEndian)
+    values["seven"].should eq(0b1110111)
+    values["two"].should eq(0b01)
+    values["three"].should eq(0)
   end
 
   it "should parse an object from an IO" do

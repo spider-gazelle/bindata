@@ -1,12 +1,14 @@
 class BinData::BitField
+  alias Value = UInt8 | UInt16 | UInt32 | UInt64 | UInt128
+
+  # NOTE: a BitField holds only immutable layout (`@bitsize`/`@mappings`), set
+  # once at class-definition time. `read`/`write` keep no per-operation state, so
+  # the per-class instance can be shared across fibers safely.
   def initialize
     @bitsize = 0
     @mappings = {} of String => Int32
-    @values = {} of String => UInt8 | UInt16 | UInt32 | UInt64 | UInt128
     # 4 + 12  ==  2bytes
   end
-
-  @buffer : Bytes?
 
   def bits(size, name)
     raise "no support for structures larger than 128 bits" if size > 128
@@ -16,8 +18,6 @@ class BinData::BitField
 
   def apply
     raise "bit mappings must be divisible by 8" if @bitsize % 8 > 0
-    # Extra byte used when writing to IO
-    @buffer = Bytes.new(@bitsize // 8)
   end
 
   def shift(buffer, num_bits, start_byte = 0)
@@ -61,9 +61,11 @@ class BinData::BitField
     buffer
   end
 
-  def read(input, format) # ameba:disable Metrics/CyclomaticComplexity
-    # Fill the buffer
-    buffer = @buffer.not_nil!
+  def read(input, format) : Hash(String, Value) # ameba:disable Metrics/CyclomaticComplexity
+    # Per-operation state only: a fresh buffer and value map, so concurrent
+    # reads of the shared per-class BitField don't race.
+    values = {} of String => Value
+    buffer = Bytes.new(@bitsize // 8)
     input.read_fully(buffer)
 
     # TODO:: Check if we need to re-order the bytes
@@ -153,14 +155,14 @@ class BinData::BitField
       shift_by = size % 8
       shift(buffer, shift_by) if shift_by > 0
 
-      @values[name] = value
+      values[name] = value
     end
 
-    input
+    values
   end
 
   # ameba:disable Metrics/CyclomaticComplexity
-  def write(io, format)
+  def write(io, format, values : Hash(String, Value))
     # Fill the buffer
     bytes = (@bitsize // 8) + 1
     buffer = Bytes.new(bytes)
@@ -176,7 +178,7 @@ class BinData::BitField
       # The extra byte lets us easily write to the buffer
       # without overwriting existing bytes
       start_byte += 1 if offset != 0
-      value = @values[name]
+      value = values[name]
 
       # Make sure there is enough space to write the bits
       temp_size = case value
@@ -238,13 +240,5 @@ class BinData::BitField
     io.write(buffer[0, bytes - 1])
 
     0_i64
-  end
-
-  def []=(name, value)
-    @values[name.to_s] = value
-  end
-
-  def [](name)
-    @values[name.to_s]
   end
 end

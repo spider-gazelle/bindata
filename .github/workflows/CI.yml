@@ -30,3 +30,7 @@ jobs:
       run: crystal tool format --check
     - name: Run tests
       run: crystal spec -v --error-trace
+    - name: Run tests (multi-threaded)
+      run: crystal spec -v --error-trace -Dpreview_mt
+      env:
+        CRYSTAL_WORKERS: "4"
