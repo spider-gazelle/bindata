@@ -275,10 +275,19 @@ abstract class BinData
           {% if part[:value] %}
             # check if we need to configure the value
             %value = ({{part[:value]}}).call
-            # This ensures numbers are cooerced to the correct type
+            # This coerces the proc's result to the field's type. Integers use
+            # `| value` to coerce width; floats can't (no bitwise `|`), so they
+            # are built directly; any other basic type is assigned as-is.
             # NOTE:: `if %value.is_a?(Number)` had issues with `String` due to `.new(0)`
             {% if part[:type] == "basic" %}
-              @{{part[:name]}} = {{part[:cls]}}.new(0) | %value
+              {% basic_type = part[:cls].resolve %}
+              {% if basic_type == Float32 || basic_type == Float64 %}
+                @{{part[:name]}} = {{part[:cls]}}.new(%value)
+              {% elsif {Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}.includes?(basic_type) %}
+                @{{part[:name]}} = {{part[:cls]}}.new(0) | %value
+              {% else %}
+                @{{part[:name]}} = %value
+              {% end %}
             {% else %}
               @{{part[:name]}} = %value || @{{part[:name]}}
             {% end %}
