@@ -37,8 +37,7 @@ class Wow < BinData
 
   field start : UInt8, value: -> { 0_u8 }
 
-  # this is a shortcut for the `Header < BinData` class
-  header :head
+  field head : Header = Header.new
 
   group :body, onlyif: -> { head.size > 0 } do
     field start : UInt8, value: -> { 1_u8 }, onlyif: -> { parent.start == 0 }
