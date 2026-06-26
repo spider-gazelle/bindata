@@ -257,16 +257,16 @@ describe ASN1 do
   end
 
   it "rejects malformed object identifiers" do
-    expect_raises(ASN1::BER::InvalidObjectId) { ASN1::BER.new.set_object_id("3.1.1") } # first arc > 2
-    expect_raises(ASN1::BER::InvalidObjectId) { ASN1::BER.new.set_object_id("0.40") }  # first < 2, second >= 40
-    expect_raises(ASN1::BER::InvalidObjectId) { ASN1::BER.new.set_object_id("1.40") }  # first < 2, second >= 40
-    expect_raises(ASN1::BER::InvalidObjectId) { ASN1::BER.new.set_object_id("1.-1") }  # negative arc
-    expect_raises(ASN1::BER::InvalidObjectId) { ASN1::BER.new.set_object_id("1.x") }   # non-numeric arc
+    expect_raises(ASN1::InvalidObjectId) { ASN1::BER.new.set_object_id("3.1.1") } # first arc > 2
+    expect_raises(ASN1::InvalidObjectId) { ASN1::BER.new.set_object_id("0.40") }  # first < 2, second >= 40
+    expect_raises(ASN1::InvalidObjectId) { ASN1::BER.new.set_object_id("1.40") }  # first < 2, second >= 40
+    expect_raises(ASN1::InvalidObjectId) { ASN1::BER.new.set_object_id("1.-1") }  # negative arc
+    expect_raises(ASN1::InvalidObjectId) { ASN1::BER.new.set_object_id("1.x") }   # non-numeric arc
   end
 
   it "rejects a payload truncated mid sub-identifier (trailing continuation bit)" do
     # 0x2a decodes fine (42), 0x86 sets the continuation bit but no octet follows.
     io = IO::Memory.new(Bytes[6, 2, 0x2a, 0x86])
-    expect_raises(ASN1::BER::InvalidObjectId) { io.read_bytes(ASN1::BER).get_object_id }
+    expect_raises(ASN1::InvalidObjectId) { io.read_bytes(ASN1::BER).get_object_id }
   end
 end

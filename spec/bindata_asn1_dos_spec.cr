@@ -24,7 +24,7 @@ describe "ASN1::BER max_content_length" do
   it "rejects a definite length larger than the cap before allocating" do
     # OctetString, long-form length 0x7FFFFFFF (~2 GiB), no payload follows.
     header = Bytes[0x04, 0x84, 0x7F, 0xFF, 0xFF, 0xFF]
-    expect_raises(ASN1::BER::ContentTooLarge) { read_capped(header, 1024) }
+    expect_raises(ASN1::ContentTooLarge) { read_capped(header, 1024) }
   end
 
   it "bounds an indefinite-length value with no terminator" do
@@ -32,14 +32,14 @@ describe "ASN1::BER max_content_length" do
     data = Bytes.new(64, 0x01_u8)
     data[0] = 0x24_u8 # constructed
     data[1] = 0x80_u8 # indefinite length
-    expect_raises(ASN1::BER::ContentTooLarge) { read_capped(data, 16) }
+    expect_raises(ASN1::ContentTooLarge) { read_capped(data, 16) }
   end
 
   it "propagates the cap into children (no amplification)" do
     # 8-byte SEQUENCE whose 6-byte payload nests a child announcing ~2 GiB.
     frame = Bytes[0x30, 0x06, 0x04, 0x84, 0x7F, 0xFF, 0xFF, 0xFF]
     root = read_capped(frame, 1024) # the outer frame is small, so this succeeds
-    expect_raises(ASN1::BER::ContentTooLarge) { root.children }
+    expect_raises(ASN1::ContentTooLarge) { root.children }
   end
 
   it "reads a normal frame that fits within the cap" do
@@ -60,6 +60,6 @@ describe "ASN1::BER max_content_length" do
     # SEQUENCE { SEQUENCE { OCTET STRING announcing ~2 GiB } }
     frame = Bytes[0x30, 0x08, 0x30, 0x06, 0x04, 0x84, 0x7F, 0xFF, 0xFF, 0xFF]
     child = read_capped(frame, 1024).children.first
-    expect_raises(ASN1::BER::ContentTooLarge) { child.children }
+    expect_raises(ASN1::ContentTooLarge) { child.children }
   end
 end

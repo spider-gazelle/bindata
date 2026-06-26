@@ -12,7 +12,7 @@ describe ASN1::BER::Identifier do
   it "rejects an over-long extended identifier" do
     bytes = Bytes[0x5F] + Bytes.new(20, 0xFF_u8) # 20 continuation bytes, never terminates
     io = IO::Memory.new(bytes)
-    expect_raises(ASN1::BER::InvalidTag) { io.read_bytes(ASN1::BER::Identifier) }
+    expect_raises(ASN1::InvalidTag) { io.read_bytes(ASN1::BER::Identifier) }
   end
 
   it "reads a valid multi-byte extended identifier" do
@@ -33,7 +33,7 @@ describe ASN1::BER::Identifier do
     max = ASN1::BER::Identifier::MAX_EXTENDED_BYTES
     bytes = Bytes[0x5F] + Bytes.new(max, 0x81_u8) + Bytes[0x00] # max + 1 parts
     io = IO::Memory.new(bytes)
-    expect_raises(ASN1::BER::InvalidTag) { io.read_bytes(ASN1::BER::Identifier) }
+    expect_raises(ASN1::InvalidTag) { io.read_bytes(ASN1::BER::Identifier) }
   end
 
   it "round-trips an extended identifier" do
