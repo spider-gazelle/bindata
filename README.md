@@ -32,9 +32,18 @@ Then you can specify the structures fields. There are a few different field type
    * useful when a group of fields are related or optional
 5. Enums
 6. Bools
-7. Arrays and Sets (fixed size and dynamic)
+7. Arrays and Sets — fixed size (`length:`) or variable (`read_next:`, a callback that keeps reading while it returns true)
 8. Strings (null-terminated, or fixed-size with an optional `encoding:`)
 9. Raw `Bytes`
+
+Plus a few structural helpers:
+
+* `skip ->{ n }` — advance past `n` bytes without storing them (zero-padded on write)
+* `remaining_bytes :name` — read the rest of the `IO` into a `Bytes` field (must be last)
+
+Most fields accept the callback options `onlyif:`, `verify:` and `value:`. The full
+per-macro reference (every field type and option) is in the inline API docs — run
+`crystal docs`.
 
 
 ### Examples
@@ -119,6 +128,24 @@ Failed to verify reading basic at VerifyData.checksum
 
 Inheritance is also supported
 
+## Skipping bytes
+
+When you only care about part of a structure, `skip` advances the `IO` past a run of
+bytes without storing them (handy for sections you don't need):
+
+```crystal
+class Section < BinData
+  endian big
+
+  field size : UInt32           # the section length, including these 4 bytes
+  skip ->{ size - 4 }           # discard the section body
+  field next_tag : UInt16       # carry on with what follows
+end
+```
+
+On write the skipped region is emitted as zero bytes, so the structure round-trips to
+the same size.
+
 ## Callbacks
 
 Callbacks can helpful for providing accessors for simplified representations of the data.
@@ -181,19 +208,20 @@ length field cannot force a huge allocation. The cap propagates to `children`.
 ```crystal
 ber = ASN1::BER.new
 ber.max_content_length = 64 * 1024
-ber.read(io) # raises ASN1::BER::ContentTooLarge if any element exceeds the cap
+ber.read(io) # raises ASN1::ContentTooLarge if any element exceeds the cap
 ```
 
 ## Errors
 
-Every (de)serialization error derives from `BinData::CustomException`, which carries the
-failing type and field:
+Every `BinData` (de)serialization error derives from `BinData::CustomException`, which
+carries the failing type and field:
 
 * `BinData::ParseError` / `BinData::WriteError` wrap any error hit while reading / writing a field
 * `BinData::VerificationException` is raised when a `verify:` callback returns `false`
 
-ASN.1 helpers raise `ASN1::BER::InvalidTag`, `ASN1::BER::InvalidObjectId` and
-`ASN1::BER::ContentTooLarge` for malformed input.
+The ASN.1 helpers raise `ASN1::InvalidTag`, `ASN1::InvalidObjectId`,
+`ASN1::InvalidPayload`, `ASN1::InvalidLength` and `ASN1::ContentTooLarge` for malformed
+input. They all derive from `ASN1::Error`, so `rescue ASN1::Error` catches any of them.
 
 ## Thread safety
 
