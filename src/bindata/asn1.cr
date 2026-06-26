@@ -83,7 +83,9 @@ module ASN1
         # init to 1 as we need two 0 bytes to indicate end of stream
         previous_byte = 1_u8
         loop do
-          current_byte = io.read_byte.not_nil!
+          # NOTE: truncated input surfaces as a NilAssertionError here; a typed
+          # error is tracked separately (audit tier 1, error model).
+          current_byte = io.read_byte.not_nil! # ameba:disable Lint/NotNil
           break if previous_byte == 0_u8 && current_byte == 0_u8
           temp.write_byte previous_byte
           ensure_content_length(temp.pos)
