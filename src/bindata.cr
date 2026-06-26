@@ -1,6 +1,25 @@
 require "./bindata/exceptions"
 require "./bindata/bitfield"
 
+# Declarative reader/writer for structured binary data.
+#
+# Subclass `BinData`, declare the wire layout with the `field` / `bit_field` /
+# `group` / `endian` DSL, and the class learns how to (de)serialize itself from
+# any `IO`:
+#
+# ```
+# class Packet < BinData
+#   endian big
+#
+#   field size : UInt16, value: -> { payload.size }
+#   field payload : Bytes, length: -> { size }
+# end
+#
+# packet = io.read_bytes(Packet) # decode
+# io.write_bytes(packet)         # encode
+# ```
+#
+# See `#field` for the supported field types and their options.
 abstract class BinData
   INDEX        = [-1]
   BIT_PARTS    = [] of Nil
@@ -67,17 +86,32 @@ abstract class BinData
     IO::ByteFormat::SystemEndian
   end
 
+  # Decodes an instance from a byte slice.
+  #
+  # The declared `endian` of the type is used; the *format* argument is accepted
+  # for `IO` interoperability but does not override it.
   def self.from_slice(bytes : Slice, format : IO::ByteFormat = IO::ByteFormat::SystemEndian)
     io = IO::Memory.new(bytes)
     from_io(io, format)
   end
 
+  # Encodes this instance to a freshly allocated byte slice.
   def to_slice
     io = IO::Memory.new
     io.write_bytes self
     io.to_slice
   end
 
+  # Sets the default byte order for every field of the type.
+  #
+  # Accepts `little`, `big`, `network` (an alias for big-endian) or `system`.
+  # Individual fields may still override it with the `field ..., endian:` option.
+  #
+  # ```
+  # class Header < BinData
+  #   endian big
+  # end
+  # ```
   macro endian(format)
     def __format__ : IO::ByteFormat
       {% format = format.id.stringify %}
@@ -94,6 +128,9 @@ abstract class BinData
     end
   end
 
+  # Reads the fields of this instance from *io*, in declaration order, and
+  # returns *io*. Raises `BinData::ParseError` (or `BinData::VerificationException`)
+  # on malformed input.
   def read(io : IO) : IO
     __perform_read__(io)
   end
@@ -102,6 +139,8 @@ abstract class BinData
     io
   end
 
+  # Writes the fields of this instance to *io* in declaration order. Raises
+  # `BinData::WriteError` (or `BinData::VerificationException`) on failure.
   def write(io : IO)
     __perform_write__(io)
     0_i64
@@ -111,10 +150,14 @@ abstract class BinData
     io
   end
 
+  # Writes this instance to *io* (`IO#write_bytes` entry point). The type's
+  # declared `endian` is used; *format* is accepted but not applied.
   def to_io(io : IO, format : IO::ByteFormat = IO::ByteFormat::SystemEndian)
     write(io)
   end
 
+  # Reads an instance from *io* (`IO#read_bytes` entry point). The type's
+  # declared `endian` is used; *format* is accepted but not applied.
   def self.from_io(io : IO, format : IO::ByteFormat = IO::ByteFormat::SystemEndian)
     data = self.new
     data.read(io)
@@ -409,6 +452,17 @@ abstract class BinData
     end
   end
 
+  # Declares a *size*-bit field inside a `bit_field` block (1 to 128 bits).
+  #
+  # The accessor is typed as the smallest unsigned integer that holds *size*
+  # bits. A `name : EnumType` declaration exposes the value as that enum.
+  #
+  # ```
+  # bit_field do
+  #   bits 5, reserved
+  #   bits 2, input : Inputs = Inputs::HDMI
+  # end
+  # ```
   macro bits(size, name, value = nil, default = nil)
     {% resolved_type = nil %}
 
@@ -471,6 +525,7 @@ abstract class BinData
     bits {{size}}, {{name}}
   end
 
+  # Declares a single-bit boolean field inside a `bit_field` block.
   macro bool(name, default = false)
     {% if name.is_a?(Assign) %}
       {% if name.value %}
@@ -491,6 +546,11 @@ abstract class BinData
     end
   end
 
+  # Groups `bits` / `bool` fields that are not byte-aligned. The total number of
+  # bits declared in the block must be divisible by 8. Use only when fields share
+  # a byte; byte-aligned values should be plain `field`s.
+  #
+  # Accepts the same *onlyif* / *verify* callbacks as `field`.
   macro bit_field(onlyif = nil, verify = nil, &block)
     {% INDEX[0] = INDEX[0] + 1 %}
     {% BIT_PARTS << {} of Nil => Nil %}
@@ -502,7 +562,17 @@ abstract class BinData
     {% PARTS << {type: "bitfield", name: INDEX[0], cls: KLASS_NAME[0], onlyif: onlyif, verify: verify} %}
   end
 
-  # }# Encapsulates a bunch of fields by creating a nested BinData class
+  # Declares a nested, isolated group of fields as its own `BinData` class.
+  #
+  # The group exposes a `parent` accessor for callbacks that need data from the
+  # enclosing type, and accepts the same *onlyif* / *verify* / *value* options as
+  # `field`. Useful for related or optional sub-structures.
+  #
+  # ```
+  # group :header, onlyif: -> { start == 0xFF } do
+  #   field version : UInt8
+  # end
+  # ```
   macro group(name, onlyif = nil, verify = nil, value = nil, &block)
     class {{name.id.stringify.camelcase.id}} < BinData
       endian({{ENDIAN[0]}})
@@ -521,6 +591,9 @@ abstract class BinData
     {% PARTS << {type: "group", name: name.id, cls: name.id.stringify.camelcase.id, onlyif: onlyif, verify: verify, value: value} %}
   end
 
+  # Reads every remaining byte of the `IO` into a `Bytes` field. Must be the last
+  # field, and requires a sized `IO` (e.g. `IO::Memory`). Accepts *onlyif* /
+  # *verify* callbacks.
   macro remaining_bytes(name, onlyif = nil, verify = nil, default = nil)
     {% REMAINING << {type: "bytes", name: name.id, onlyif: onlyif, verify: verify} %}
     property {{name.id}} : Bytes = {% if default %} {{default}}.to_slice {% else %} Bytes.new(0) {% end %}
@@ -531,6 +604,29 @@ abstract class BinData
     {% PARTS << {type: "enum", name: name, cls: cls, onlyif: onlyif, verify: verify, value: value, encoding: encoding, enum_type: enum_type} %}
   end
 
+  # Declares a binary field from a type declaration (`name : Type [= default]`).
+  #
+  # The supported field types are:
+  # * integers (`UInt8`..`UInt128`, `Int8`..`Int128`) and floats (`Float32`/`Float64`)
+  # * `String` — null-terminated, or fixed-size with `length:` (and optional `encoding:`)
+  # * `Bytes` — requires a `length:` callback
+  # * `Enum` types — require a default value
+  # * `Array`/`Set` — require `length:` (fixed) or `read_next:` (variable)
+  # * any other `BinData` / IO-serializable type (custom field)
+  #
+  # Options (all accept a `Proc`, evaluated against the instance):
+  # * *onlyif* — read/write the field only when the callback returns true
+  # * *verify* — raise `BinData::VerificationException` unless the callback returns true
+  # * *value* — compute the field's value just before writing (e.g. a length/checksum)
+  # * *length* — element/byte count for sized `Bytes`/`String`/`Array`/`Set`
+  # * *read_next* — keep reading array elements while the callback returns true
+  # * *encoding* — string encoding for fixed-size `String` fields
+  # * *endian* — override the type's byte order for this field (numeric fields)
+  #
+  # ```
+  # field size : UInt16, value: -> { text.bytesize }
+  # field text : String, length: -> { size }
+  # ```
   macro field(type_declaration, onlyif = nil, verify = nil, value = nil, length = nil, read_next = nil, encoding = nil, endian = nil)
     {% if !type_declaration.is_a?(TypeDeclaration) %}
       {% raise "#{type_declaration} must be a TypeDeclaration" %}
@@ -572,10 +668,14 @@ abstract class BinData
     {% end %}
   end
 
+  # Registers a callback run on the instance just before it is written, e.g. to
+  # derive raw fields from a friendlier representation.
   macro before_serialize(&block)
     {% BEFORE_SERIALIZE << block %}
   end
 
+  # Registers a callback run on the instance just after it is read, e.g. to expose
+  # a friendlier representation of the raw fields.
   macro after_deserialize(&block)
     {% AFTER_DESERIALIZE << block %}
   end

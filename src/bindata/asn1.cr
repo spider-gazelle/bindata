@@ -9,6 +9,25 @@ require "./asn1/length"
 require "./asn1/data_types"
 
 module ASN1
+  # A single ASN.1 Basic Encoding Rules (BER) TLV element: an identifier (tag),
+  # a length and a payload. Used to build and parse SNMP, LDAP, X.509 and similar
+  # protocols.
+  #
+  # ```
+  # require "bindata/asn1"
+  #
+  # ber = ASN1::BER.new
+  # ber.set_integer(42)
+  # io.write_bytes(ber)
+  #
+  # ber = io.read_bytes(ASN1::BER)
+  # ber.get_integer # => 42
+  # ```
+  #
+  # Typed payload accessors live in `data_types.cr` (`get_integer`/`set_integer`,
+  # `get_object_id`/`set_object_id`, `get_string`, `get_boolean`, ...). A
+  # constructed element can be split into / built from sub-elements with
+  # `#children` / `#children=`.
   class BER < BinData
     endian big
 
@@ -55,6 +74,8 @@ module ASN1
       @identifier.tag_number = tag_type.to_i.to_u8
     end
 
+    # The universal tag as a `UniversalTags` enum. Raises unless this is a
+    # universal-class element.
     def tag
       raise "only valid for universal tags" unless tag_class == TagClass::Universal
       UniversalTags.new tag_number.to_i
@@ -72,6 +93,7 @@ module ASN1
       @identifier.extended
     end
 
+    # The decoded payload length in bytes.
     def size
       @length.length
     end
@@ -124,14 +146,16 @@ module ASN1
       0_i64
     end
 
-    # Check if this can be expanded into multiple sub-entries
+    # Whether this is a constructed universal Sequence or Set, i.e. an element
+    # whose payload is itself a list of BER elements (see `#children`).
     def sequence?
       return false unless tag_class == TagClass::Universal
       tag = UniversalTags.new tag_number.to_i
       constructed && {UniversalTags::Sequence, UniversalTags::Set}.includes?(tag)
     end
 
-    # Extracts children from the payload
+    # Parses the payload as a sequence of nested BER elements. The
+    # `max_content_length` cap propagates to each child.
     def children
       parts = [] of BER
       io = IO::Memory.new(@payload)
@@ -145,6 +169,7 @@ module ASN1
       parts
     end
 
+    # Encodes *parts* into the payload and marks this element constructed.
     def children=(parts)
       self.constructed = true
       io = IO::Memory.new

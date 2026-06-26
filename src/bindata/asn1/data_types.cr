@@ -1,10 +1,14 @@
 require "big"
 
 class ASN1::BER < BinData
+  # Raised by a typed accessor when the element's tag class/number doesn't match
+  # the type being requested.
   class InvalidTag < Exception; end
 
+  # Raised when an object identifier string or encoding is malformed.
   class InvalidObjectId < Exception; end
 
+  # The ASN.1 universal tag numbers, in tag-number order.
   enum UniversalTags
     EndOfContent
     Boolean
@@ -152,6 +156,7 @@ class ASN1::BER < BinData
     @payload
   end
 
+  # Sets the raw payload bytes and the given tag.
   def set_bytes(data, tag = UniversalTags::OctetString, tag_class = TagClass::Universal)
     self.tag_class = tag_class
     self.tag_number = tag
@@ -178,11 +183,13 @@ class ASN1::BER < BinData
     self
   end
 
+  # Reads the payload as a BOOLEAN.
   def get_boolean
     ensure_universal(UniversalTags::Boolean)
     @payload[0] != 0_u8
   end
 
+  # Sets a BOOLEAN payload.
   def set_boolean(value)
     self.tag_class = TagClass::Universal
     self.tag_number = UniversalTags::Boolean
@@ -191,6 +198,7 @@ class ASN1::BER < BinData
     self
   end
 
+  # Reads the payload as a two's-complement signed INTEGER (or ENUMERATED).
   def get_integer(check_tags = {UniversalTags::Integer, UniversalTags::Enumerated}, check_class = TagClass::Universal) : Int64
     raise InvalidTag.new("not a universal tag: #{tag_class}") unless tag_class == check_class
     raise InvalidTag.new("object is a #{tag}, expecting one of #{check_tags}") unless check_tags.includes?(tag)
@@ -219,6 +227,7 @@ class ASN1::BER < BinData
     start
   end
 
+  # Returns the INTEGER payload as raw bytes, with a leading zero/sign pad removed.
   def get_integer_bytes : Bytes
     ensure_universal(UniversalTags::Integer)
     return Bytes.new(0) if @payload.size == 0
@@ -227,6 +236,7 @@ class ASN1::BER < BinData
     @payload
   end
 
+  # Encodes *value* as a minimal two's-complement INTEGER payload.
   # ameba:disable Metrics/CyclomaticComplexity
   def set_integer(value, tag = UniversalTags::Integer, tag_class = TagClass::Universal)
     self.tag_class = tag_class
@@ -283,6 +293,7 @@ class ASN1::BER < BinData
     self
   end
 
+  # Reads the payload as a BIT STRING (only the zero-unused-bits form is supported).
   def get_bitstring
     ensure_universal(UniversalTags::BitString)
     if @payload[0] == 0
