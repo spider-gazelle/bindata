@@ -1,4 +1,6 @@
 class ASN1::BER < BinData
+  class InvalidLength < Exception; end
+
   class Length < BinData
     endian big
 
@@ -35,6 +37,9 @@ class ASN1::BER < BinData
         long_bytes.reverse.each_with_index do |byte, index|
           @length = @length | (byte.to_i32 << (index * 8))
         end
+        # A 4-byte length with the high bit set overflows the Int32 we store it
+        # in, surfacing as a negative value; reject it rather than misread it.
+        raise InvalidLength.new("ASN.1 length exceeds Int32 maximum") if @length < 0
       else
         @length = length_indicator.to_i32
       end
@@ -42,7 +47,8 @@ class ASN1::BER < BinData
     end
 
     def write(io : IO)
-      self.long = true if @length >= 127
+      # Lengths 0..127 fit in short form; only 128+ need long form.
+      self.long = true if @length > 127
 
       if long
         @long_bytes = [] of UInt8
