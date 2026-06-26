@@ -38,7 +38,7 @@ abstract class BinData
     "read", "write", "to_io", "from_io", "to_slice", "from_slice", "to_s", "bit_fields", "parent",
     # DSL macros
     "endian", "field", "bits", "enum_bits", "bool", "bit_field", "group",
-    "remaining_bytes", "before_serialize", "after_deserialize",
+    "remaining_bytes", "skip", "before_serialize", "after_deserialize",
     "custom", "enum_field", "array", "variable_array", "string", "bytes",
     # deprecated per-type field macros (uintN / intN / floatN and their be/le forms)
     "uint8", "uint8be", "uint8le", "int8", "int8be", "int8le",
@@ -259,6 +259,10 @@ abstract class BinData
               %value = %values[{{name.id.stringify}}]
               @{{name}} = %value.as({{value[0]}})
             {% end %}
+
+          {% elsif part[:type] == "skip" %}
+            # advance past the bytes without storing them
+            io.skip(({{part[:length]}}).call)
           {% end %}
 
           {% if part[:onlyif] %}
@@ -417,6 +421,10 @@ abstract class BinData
             {% end %}
 
             %bitfield.write(io, %endian, %values)
+
+          {% elsif part[:type] == "skip" %}
+            # nothing was stored: emit the skipped region as zero padding
+            io.write(Bytes.new(({{part[:length]}}).call))
           {% end %}
 
           {% if part[:onlyif] %}
@@ -614,6 +622,19 @@ abstract class BinData
   macro remaining_bytes(name, onlyif = nil, verify = nil, default = nil)
     {% REMAINING << {type: "bytes", name: name.id, onlyif: onlyif, verify: verify} %}
     property {{name.id}} : Bytes = {% if default %} {{default}}.to_slice {% else %} Bytes.new(0) {% end %}
+  end
+
+  # Reads and discards *length* bytes (advancing the `IO`) without storing them,
+  # for sections you don't need to keep. There is no accessor. On write the region
+  # is emitted as *length* zero bytes, so the structure round-trips to the same
+  # size. Accepts *onlyif* / *verify* callbacks.
+  #
+  # ```
+  # field section_size : UInt32
+  # skip -> { section_size - 4 }
+  # ```
+  macro skip(length, onlyif = nil, verify = nil)
+    {% PARTS << {type: "skip", name: "skip", length: length, onlyif: onlyif, verify: verify} %}
   end
 
   # this needs to be split out so we can resolve the enum base_type
