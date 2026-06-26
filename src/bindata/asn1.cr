@@ -99,8 +99,11 @@ module ASN1
       super(io)
       if @length.indefinite?
         temp = IO::Memory.new
-        # init to 1 as we need two 0 bytes to indicate end of stream
-        previous_byte = 1_u8
+        # Read with one byte of look-ahead so the terminating `00 00` is detected
+        # without being written into the payload. Seed with the first content byte
+        # itself — seeding with a fake sentinel would prepend it to the payload.
+        previous_byte = io.read_byte ||
+                        raise ASN1::Error.new("unexpected end of input in indefinite-length BER content")
         loop do
           current_byte = io.read_byte ||
                          raise ASN1::Error.new("unexpected end of input in indefinite-length BER content")
