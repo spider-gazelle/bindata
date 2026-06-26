@@ -4,6 +4,7 @@ module ASN1; end
 
 class BER < BinData; end
 
+require "./asn1/exceptions"
 require "./asn1/identifier"
 require "./asn1/length"
 require "./asn1/data_types"
@@ -30,10 +31,6 @@ module ASN1
   # `#children` / `#children=`.
   class BER < BinData
     endian big
-
-    # Raised when a declared content length exceeds `max_content_length`.
-    class ContentTooLarge < Exception
-    end
 
     # Components of a BER object
     field identifier : Identifier = Identifier.new

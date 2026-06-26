@@ -1,13 +1,6 @@
 require "big"
 
 class ASN1::BER < BinData
-  # Raised by a typed accessor when the element's tag class/number doesn't match
-  # the type being requested.
-  class InvalidTag < Exception; end
-
-  # Raised when an object identifier string or encoding is malformed.
-  class InvalidObjectId < Exception; end
-
   # The ASN.1 universal tag numbers, in tag-number order.
   enum UniversalTags
     EndOfContent
@@ -186,6 +179,7 @@ class ASN1::BER < BinData
   # Reads the payload as a BOOLEAN.
   def get_boolean
     ensure_universal(UniversalTags::Boolean)
+    raise InvalidPayload.new("empty BOOLEAN payload") if @payload.empty?
     @payload[0] != 0_u8
   end
 
@@ -296,6 +290,7 @@ class ASN1::BER < BinData
   # Reads the payload as a BIT STRING (only the zero-unused-bits form is supported).
   def get_bitstring
     ensure_universal(UniversalTags::BitString)
+    raise InvalidPayload.new("empty BIT STRING payload") if @payload.empty?
     if @payload[0] == 0
       @payload[1, @payload.size - 1]
     else

@@ -33,6 +33,6 @@ describe ASN1::BER::Length do
 
   it "rejects a long-form length that exceeds Int32" do
     io = IO::Memory.new(Bytes[0x84, 0x80, 0x00, 0x00, 0x00])
-    expect_raises(ASN1::BER::InvalidLength) { io.read_bytes(ASN1::BER::Length) }
+    expect_raises(ASN1::InvalidLength) { io.read_bytes(ASN1::BER::Length) }
   end
 end
