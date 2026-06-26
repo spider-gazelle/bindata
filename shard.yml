@@ -1,5 +1,5 @@
 name: bindata
-version: 2.1.1
+version: 3.0.0
 crystal: ">= 1.0.0"
 
 development_dependencies:
