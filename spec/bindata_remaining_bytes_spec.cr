@@ -106,4 +106,15 @@ describe BinData do
 
     io2.to_slice.should eq(io.to_slice)
   end
+
+  it "reads the remaining bytes from a non-sized (streaming) IO" do
+    reader, writer = IO.pipe
+    writer.write(Bytes[0x02, 0xAA, 0xBB, 0xCC, 0xDD])
+    writer.close
+
+    r = reader.read_bytes(RemainingBytesData)
+    r.first.should eq(0x02)
+    r.rest.should eq(Bytes[0xAA, 0xBB, 0xCC, 0xDD])
+    reader.close
+  end
 end
