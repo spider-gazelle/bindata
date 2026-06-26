@@ -113,6 +113,11 @@ abstract class BinData
   # end
   # ```
   macro endian(format)
+    # A `group` captures the endianness at its declaration point, so declaring
+    # `endian` after one would silently leave it system-endian. Fail loudly.
+    {% if PARTS.any? { |part| part[:type] == "group" } %}
+      {% raise "#{@type}: `endian` must be declared before any `group`" %}
+    {% end %}
     def __format__ : IO::ByteFormat
       {% format = format.id.stringify %}
       {% ENDIAN[0] = format.id.stringify %}
