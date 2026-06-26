@@ -70,12 +70,11 @@ class BinData::BitField
     buffer.reverse! if format == IO::ByteFormat::LittleEndian
 
     @mappings.each do |name, size|
-      # Read out the data we are after using this buffer
-      io = IO::Memory.new(buffer)
-      io.rewind
-
+      # Fields up to 16 bits (every BER identifier and length goes through here)
+      # decode straight from the buffer slice — no per-field IO::Memory in this
+      # hot loop. The wider cases below still wrap the buffer so they can pad it.
       if size <= 8
-        value = io.read_bytes(UInt8, IO::ByteFormat::BigEndian)
+        value = buffer[0]
 
         if size < 8
           # Shift the bits we're interested in towards 0 (as they are high bits)
@@ -84,7 +83,7 @@ class BinData::BitField
           value = value & ((1_u8 << size) - 1_u8)
         end
       elsif size <= 16
-        value = io.read_bytes(UInt16, IO::ByteFormat::BigEndian)
+        value = IO::ByteFormat::BigEndian.decode(UInt16, buffer)
 
         if size < 16
           # Shift the bits we're interested in towards 0 (as they are high bits)
@@ -93,6 +92,7 @@ class BinData::BitField
           value = value & ((1_u16 << size) - 1_u16)
         end
       elsif size <= 32
+        io = IO::Memory.new(buffer)
         # adjust buffer as required to read the value
         if (io.size - io.pos) < 4
           io_new = IO::Memory.new(Bytes.new(4))
@@ -109,6 +109,7 @@ class BinData::BitField
           value = value & ((1_u32 << size) - 1_u32)
         end
       elsif size <= 64
+        io = IO::Memory.new(buffer)
         # adjust buffer as required to read the value
         if (io.size - io.pos) < 8
           io_new = IO::Memory.new(Bytes.new(8))
@@ -125,6 +126,7 @@ class BinData::BitField
           value = value & ((1_u64 << size) - 1_u64)
         end
       elsif size <= 128
+        io = IO::Memory.new(buffer)
         # adjust buffer as required to read the value
         if (io.size - io.pos) < 16
           io_new = IO::Memory.new(Bytes.new(16))
