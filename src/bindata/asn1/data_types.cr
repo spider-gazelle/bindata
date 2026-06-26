@@ -294,8 +294,8 @@ class ASN1::BER < BinData
     if @payload[0] == 0
       @payload[1, @payload.size - 1]
     else
-      # skip = @payload[0]
-      raise "skip not implemented"
+      # @payload[0] is the count of unused trailing bits — not handled yet
+      raise ASN1::Error.new("BIT STRING with unused bits is not supported")
     end
   end
 end

@@ -74,7 +74,7 @@ module ASN1
     # The universal tag as a `UniversalTags` enum. Raises unless this is a
     # universal-class element.
     def tag
-      raise "only valid for universal tags" unless tag_class == TagClass::Universal
+      raise ASN1::InvalidTag.new("only valid for universal tags") unless tag_class == TagClass::Universal
       UniversalTags.new tag_number.to_i
     end
 

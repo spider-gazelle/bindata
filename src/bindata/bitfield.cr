@@ -11,13 +11,13 @@ class BinData::BitField
   end
 
   def bits(size, name)
-    raise "no support for structures larger than 128 bits" if size > 128
+    raise ArgumentError.new("no support for structures larger than 128 bits") if size > 128
     @bitsize += size
     @mappings[name.to_s] = size
   end
 
   def apply
-    raise "bit mappings must be divisible by 8" if @bitsize % 8 > 0
+    raise ArgumentError.new("bit mappings must be divisible by 8") if @bitsize % 8 > 0
   end
 
   def shift(buffer, num_bits, start_byte = 0)
@@ -141,7 +141,7 @@ class BinData::BitField
           value = value & ((1_u128 << size) - 1_u128)
         end
       else
-        raise "no support for structures larger than 128 bits"
+        raise ArgumentError.new("no support for structures larger than 128 bits")
       end
 
       # relies on integer division rounding down
