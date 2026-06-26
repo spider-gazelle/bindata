@@ -1,4 +1,6 @@
 class ASN1::BER < BinData
+  # The length octets of a BER element: short form, long form, or the indefinite
+  # marker. The decoded byte count is exposed as `#length`.
   class Length < BinData
     endian big
 

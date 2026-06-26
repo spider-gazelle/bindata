@@ -1,4 +1,5 @@
 class ASN1::BER < BinData
+  # The class of an ASN.1 tag.
   enum TagClass
     Universal
     Application
@@ -6,6 +7,8 @@ class ASN1::BER < BinData
     Private
   end
 
+  # One continuation byte of a high-tag-number (extended) identifier: a 7-bit
+  # chunk of the tag number plus a `more` bit.
   class ExtendedIdentifier < BinData
     endian big
 
@@ -15,6 +18,8 @@ class ASN1::BER < BinData
     end
   end
 
+  # The leading identifier octet of a BER element (tag class, constructed flag and
+  # tag number), plus any high-tag-number continuation bytes.
   class Identifier < BinData
     endian big
 
