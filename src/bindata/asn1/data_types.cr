@@ -1,3 +1,5 @@
+require "big"
+
 class ASN1::BER < BinData
   class InvalidTag < Exception; end
 
@@ -42,69 +44,90 @@ class ASN1::BER < BinData
     raise InvalidTag.new("object is a #{tag}, expecting #{check_tag}") unless tag == check_tag
   end
 
-  # Returns the object ID in string format
+  # Returns the object ID in string format.
+  #
+  # Sub-identifiers are decoded as big-endian base-128 numbers per X.690 §8.19
+  # (every octet but the last has its high bit set), so arcs of any size are
+  # supported. `BigInt` is used because OID arcs are unbounded (e.g. UUID-based
+  # OIDs under `2.25`, ITU-T X.667).
   def get_object_id
     ensure_universal(UniversalTags::ObjectIdentifier)
     return "" if @payload.size == 0
 
-    value0 = @payload[0].to_i32
-    second = value0 % 40
-    first = (value0 - second) // 40
-    raise InvalidObjectId.new(@payload.inspect) if first > 2
-    object_id = [first, second]
-
-    # Some crazy shit going on here: https://docs.microsoft.com/en-us/windows/desktop/seccertenroll/about-object-identifier
-    n = 0
-    (1...@payload.size).each do |i|
-      if @payload[i] > 0x80 && n == 0
-        n = (@payload[i].to_i32 & 0x7f) << 8
-      elsif n > 0
-        # We need to ignore the high bit of the 2nd byte
-        n = n + (@payload[i] << 1)
-        object_id << (n >> 1)
-        n = 0
-      else
-        object_id << @payload[i].to_i32
+    # Decode the payload into its base-128 sub-identifiers. This is BER-permissive
+    # and does not reject non-minimal encodings (a leading 0x80 octet), which
+    # X.690 §8.19.2 forbids for DER but which decode unambiguously.
+    sub_ids = [] of BigInt
+    value = BigInt.new(0)
+    pending = false
+    @payload.each do |byte|
+      value = value * 128 + (byte & 0x7f)
+      pending = true
+      if (byte & 0x80) == 0
+        sub_ids << value
+        value = BigInt.new(0)
+        pending = false
       end
     end
+    # A trailing continuation bit means the OID was truncated mid sub-identifier.
+    raise InvalidObjectId.new(@payload.inspect) if pending
 
-    object_id.join(".")
+    # The first sub-identifier encodes the first two arcs: Y0 = 40 * X + Y,
+    # with X capped at 2 (X = 2 absorbs any second arc, which may be large).
+    first_sub = sub_ids.first
+    if first_sub < 80
+      arcs = [first_sub // 40, first_sub % 40]
+    else
+      arcs = [BigInt.new(2), first_sub - 80]
+    end
+    arcs.concat(sub_ids[1..])
+
+    arcs.join(".")
   end
 
-  # Sets a string representing an object ID
+  # Sets a string representing an object ID.
+  #
+  # Each arc is encoded as a big-endian base-128 number per X.690 §8.19. Arcs
+  # are parsed as `BigInt`, so arbitrarily large values are supported.
   def set_object_id(oid)
-    value = oid.split(".").map &.to_i
-
-    raise InvalidObjectId.new(value.inspect) if value.size < 1
-    raise InvalidObjectId.new(value.inspect) if value[0] > 2
-
-    # Set the appropriate tags
-    self.tag_class = TagClass::Universal
-    self.tag_number = UniversalTags::ObjectIdentifier
-    data = IO::Memory.new
-
-    # Convert the string to bytes
-    if value.size > 1
-      raise InvalidObjectId.new(value.inspect) if value[0] < 2 && value[1] > 40
-      # First two parts are combined
-      data.write_byte (40 * value[0] + value[1]).to_u8
-      (2...value.size).each do |i|
-        if value[i] < 0x80
-          data.write_byte(value[i].to_u8)
-        else
-          # Parts bigger than 128 are represented by 2 bytes (14 usable bits)
-          bytes = value[i] << 1
-          data.write_byte (((bytes & 0xFF00) >> 8) | 0x80).to_u8
-          data.write_byte ((bytes & 0xFF) >> 1).to_u8
-        end
-      end
-    else
-      data.write_byte((40 * value[0]).to_u8)
+    # `BigInt.new` rejects non-numeric / empty arcs.
+    arcs = begin
+      oid.split(".").map { |part| BigInt.new(part) }
+    rescue ArgumentError
+      raise InvalidObjectId.new(oid)
     end
 
+    raise InvalidObjectId.new(oid) if arcs.empty?
+    raise InvalidObjectId.new(oid) if arcs.any?(&.negative?)
+    raise InvalidObjectId.new(oid) if arcs[0] > 2
+    raise InvalidObjectId.new(oid) if arcs.size > 1 && arcs[0] < 2 && arcs[1] >= 40
+
+    self.tag_class = TagClass::Universal
+    self.tag_number = UniversalTags::ObjectIdentifier
+
+    data = IO::Memory.new
+    if arcs.size > 1
+      # The first two arcs are combined into a single sub-identifier.
+      write_oid_sub_id(data, arcs[0] * 40 + arcs[1])
+      arcs[2..].each { |arc| write_oid_sub_id(data, arc) }
+    else
+      write_oid_sub_id(data, arcs[0] * 40)
+    end
     @payload = data.to_slice
 
     self
+  end
+
+  # Writes a single OID sub-identifier as a big-endian base-128 number, setting
+  # the high (continuation) bit on every octet except the last.
+  private def write_oid_sub_id(io : IO, value : BigInt) : Nil
+    septets = [(value % 128).to_u8]
+    value //= 128
+    while value > 0
+      septets << ((value % 128).to_u8 | 0x80_u8)
+      value //= 128
+    end
+    septets.reverse_each { |byte| io.write_byte(byte) }
   end
 
   # Gets a hex representation of the bytes

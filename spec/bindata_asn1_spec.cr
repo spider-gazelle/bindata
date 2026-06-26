@@ -187,4 +187,86 @@ describe ASN1 do
     # io = IO::Memory.new(b)
     # io.read_bytes(ASN1::BER).get_bitstring.should eq(Bytes[0x0, 0xF])
   end
+
+  # --- Object Identifier: base-128 multi-byte sub-identifiers (X.690 §8.19) ---
+  # Audit Tier 0.1 / 0.2 — large arcs were silently corrupted / overflowed.
+
+  it "writes an OID whose arc needs 3 base-128 bytes (RSA: 1.2.840.113549.1.1.1)" do
+    # 42=0x2a ; 840=0x86 0x48 ; 113549=0x86 0xf7 0x0d ; 1 1 1
+    goal = Bytes[6, 9, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 1, 1, 1]
+    test = ASN1::BER.new
+    test.set_object_id "1.2.840.113549.1.1.1"
+
+    io = IO::Memory.new
+    io.write_bytes(test)
+    io.to_slice.should eq(goal)
+  end
+
+  it "reads an OID whose arc needs 3 base-128 bytes (RSA: 1.2.840.113549.1.1.1)" do
+    b = Bytes[6, 9, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 1, 1, 1]
+    io = IO::Memory.new(b)
+    io.read_bytes(ASN1::BER).get_object_id.should eq("1.2.840.113549.1.1.1")
+  end
+
+  it "round-trips a large first sub-identifier under joint-iso-itu-t (2.999.3)" do
+    # first=2, second=999 -> Y0 = 40*2 + 999 = 1079 = 0x88 0x37
+    goal = Bytes[6, 3, 0x88, 0x37, 3]
+    test = ASN1::BER.new
+    test.set_object_id "2.999.3"
+
+    io = IO::Memory.new
+    io.write_bytes(test)
+    io.to_slice.should eq(goal)
+
+    io.rewind
+    io.read_bytes(ASN1::BER).get_object_id.should eq("2.999.3")
+  end
+
+  it "round-trips an arc larger than UInt64 (UUID-based OID, ITU-T X.667)" do
+    oid = "2.25.340282366920938463463374607431768211455" # 2.25.(2**128 - 1)
+    test = ASN1::BER.new
+    test.set_object_id oid
+
+    io = IO::Memory.new
+    io.write_bytes(test)
+    io.rewind
+    io.read_bytes(ASN1::BER).get_object_id.should eq(oid)
+  end
+
+  it "round-trips the first-sub-identifier boundary arcs (X = 0/1/2)" do
+    {
+      "1.39" => Bytes[6, 1, 0x4f],       # 40 + 39 = 79
+      "2.0"  => Bytes[6, 1, 0x50],       # 80
+      "2.47" => Bytes[6, 1, 0x7f],       # 80 + 47 = 127, last single-octet value
+      "2.48" => Bytes[6, 2, 0x81, 0x00], # 128, first value needing two octets
+    }.each do |oid, goal|
+      test = ASN1::BER.new
+      test.set_object_id oid
+      io = IO::Memory.new
+      io.write_bytes(test)
+      io.to_slice.should eq(goal)
+
+      io.rewind
+      io.read_bytes(ASN1::BER).get_object_id.should eq(oid)
+    end
+  end
+
+  it "reads an empty object identifier payload as an empty string" do
+    io = IO::Memory.new(Bytes[6, 0])
+    io.read_bytes(ASN1::BER).get_object_id.should eq("")
+  end
+
+  it "rejects malformed object identifiers" do
+    expect_raises(ASN1::BER::InvalidObjectId) { ASN1::BER.new.set_object_id("3.1.1") } # first arc > 2
+    expect_raises(ASN1::BER::InvalidObjectId) { ASN1::BER.new.set_object_id("0.40") }  # first < 2, second >= 40
+    expect_raises(ASN1::BER::InvalidObjectId) { ASN1::BER.new.set_object_id("1.40") }  # first < 2, second >= 40
+    expect_raises(ASN1::BER::InvalidObjectId) { ASN1::BER.new.set_object_id("1.-1") }  # negative arc
+    expect_raises(ASN1::BER::InvalidObjectId) { ASN1::BER.new.set_object_id("1.x") }   # non-numeric arc
+  end
+
+  it "rejects a payload truncated mid sub-identifier (trailing continuation bit)" do
+    # 0x2a decodes fine (42), 0x86 sets the continuation bit but no octet follows.
+    io = IO::Memory.new(Bytes[6, 2, 0x2a, 0x86])
+    expect_raises(ASN1::BER::InvalidObjectId) { io.read_bytes(ASN1::BER).get_object_id }
+  end
 end
