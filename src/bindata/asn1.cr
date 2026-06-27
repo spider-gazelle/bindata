@@ -41,6 +41,17 @@ module ASN1
     # explicitly (rather than via `IO#read_bytes`) lets a cap be set before
     # parsing, and `#children` propagates it to nested elements.
 
+    # Maximum nesting depth that `#children` will descend before raising
+    # `MaxDepthExceeded`. The default (100) guards a recursive consumer walk
+    # against stack overflow on a deeply nested message (a few KB of `30 80 …`
+    # encodes thousands of levels); `0` disables the limit. Propagated to each
+    # child alongside `max_content_length`.
+    property max_depth : Int32 = 100
+
+    # This element's depth in the parse tree (root = 0). Set by the parent's
+    # `#children` so the limit is enforced relative to where parsing started.
+    protected property depth : Int32 = 0
+
     def tag_class
       @identifier.tag_class
     end
@@ -161,14 +172,23 @@ module ASN1
     end
 
     # Parses the payload as a sequence of nested BER elements. The
-    # `max_content_length` cap propagates to each child.
+    # `max_content_length` and `max_depth` caps propagate to each child.
     def children
+      # Refuse to descend past the limit, so a recursive consumer walk gets a
+      # typed error instead of a stack overflow on a deeply nested message.
+      if @max_depth > 0 && @depth >= @max_depth
+        raise MaxDepthExceeded.new("ASN.1 nesting depth exceeds max_depth #{@max_depth}")
+      end
+
       parts = [] of BER
       io = IO::Memory.new(@payload)
       while io.pos < io.size
-        # Propagate the cap so a small frame can't smuggle an oversized child.
+        # Propagate the caps so a small frame can't smuggle an oversized or
+        # over-deep child.
         child = BER.new
         child.max_content_length = @max_content_length
+        child.max_depth = @max_depth
+        child.depth = @depth + 1
         child.read(io)
         parts << child
       end
