@@ -16,6 +16,9 @@ module ASN1
   # Raised when a declared content length exceeds `ASN1::BER#max_content_length`.
   class ContentTooLarge < Error; end
 
+  # Raised when nested `ASN1::BER#children` parsing exceeds `max_depth`.
+  class MaxDepthExceeded < Error; end
+
   # Raised when a BER length is malformed or exceeds the representable range.
   class InvalidLength < Error; end
 end
