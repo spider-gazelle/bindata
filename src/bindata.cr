@@ -47,6 +47,19 @@ abstract class BinData
     @@bit_fields
   end
 
+  # Maximum number of bytes/elements any single field of this instance (and its
+  # nested `BinData` children) may allocate or read. `0`, the default, means
+  # unlimited, so existing behaviour is unchanged. Set a positive cap before
+  # reading untrusted input to guard against allocation/exhaustion DoS:
+  #
+  #     packet = Packet.new
+  #     packet.max_content_length = 64 * 1024
+  #     packet.read(io)
+  #
+  # The cap propagates into nested `group`/`array` `BinData` children so a small
+  # frame cannot smuggle an oversized one.
+  property max_content_length : Int32 = 0
+
   def __format__ : IO::ByteFormat
     IO::ByteFormat::SystemEndian
   end
@@ -150,6 +163,17 @@ abstract class BinData
     size
   end
 
+  # Enforces `max_content_length` against a size/count derived from the wire
+  # before it is used to allocate a buffer, size an array, or bound a loop. A
+  # cap of `0` (the default) is unlimited. Returns *size* unchanged when allowed.
+  protected def __enforce_content_length__(size : Int32) : Int32
+    return size if @max_content_length <= 0
+    if size > @max_content_length
+      raise ContentTooLarge.new("content length #{size} exceeds max_content_length #{@max_content_length}")
+    end
+    size
+  end
+
   macro __build_methods__
     protected def __perform_read__(io : IO) : IO
       # Support inheritance
@@ -177,23 +201,49 @@ abstract class BinData
               @{{part[:name]}} = io.read_bytes({{part_type.types.reject(&.nilable?)[0]}}, %endian)
             {% elsif part_type.union? %}
               @{{part[:name]}} = io.read_bytes({{part_type.union_types.reject(&.nilable?)[0]}}, %endian)
+            {% elsif part_type < BinData %}
+              # Nested BinData: read explicitly so the content cap propagates
+              # (a small frame must not smuggle an oversized child).
+              %nested = {{part[:cls]}}.new
+              %nested.max_content_length = @max_content_length
+              %nested.read(io)
+              @{{part[:name]}} = %nested
             {% else %}
               @{{part[:name]}} = io.read_bytes({{part[:cls]}}, %endian)
             {% end %}
 
           {% elsif part[:type] == "array" %}
-            %size = __read_length__(({{part[:length]}}).call)
+            %size = __enforce_content_length__(__read_length__(({{part[:length]}}).call))
             @{{part[:name]}} = [] of {{part[:cls]}}
             (0...%size).each do
-              @{{part[:name]}} << io.read_bytes({{part[:cls]}}, %endian)
+              {% if part[:cls].resolve < BinData %}
+                %element = {{part[:cls]}}.new
+                %element.max_content_length = @max_content_length
+                %element.read(io)
+                @{{part[:name]}} << %element
+              {% else %}
+                @{{part[:name]}} << io.read_bytes({{part[:cls]}}, %endian)
+              {% end %}
             end
 
           {% elsif part[:type] == "variable_array" %}
             @{{part[:name]}} = [] of {{part[:cls]}}
+            %count = 0
             loop do
               # Stop if the callback indicates there is no more
               break unless ({{part[:read_next]}}).call
-              @{{part[:name]}} << io.read_bytes({{part[:cls]}}, %endian)
+              # Bound the loop under a cap so a non-advancing element can't spin
+              # forever. With no cap the counter is left untouched, so behaviour
+              # (and the unbounded loop) is exactly as before.
+              __enforce_content_length__(%count += 1) if @max_content_length > 0
+              {% if part[:cls].resolve < BinData %}
+                %element = {{part[:cls]}}.new
+                %element.max_content_length = @max_content_length
+                %element.read(io)
+                @{{part[:name]}} << %element
+              {% else %}
+                @{{part[:name]}} << io.read_bytes({{part[:cls]}}, %endian)
+              {% end %}
             end
 
           {% elsif part[:type] == "enum" %}
@@ -202,11 +252,12 @@ abstract class BinData
           {% elsif part[:type] == "group" %}
             @{{part[:name]}} = {{part[:cls]}}.new
             @{{part[:name]}}.parent = self
+            @{{part[:name]}}.max_content_length = @max_content_length
             @{{part[:name]}}.read(io)
 
           {% elsif part[:type] == "bytes" %}
             # There is a length calculation
-            %size = __read_length__(({{part[:length]}}).call)
+            %size = __enforce_content_length__(__read_length__(({{part[:length]}}).call))
             %buf = Bytes.new(%size)
             io.read_fully(%buf)
             @{{part[:name]}} = %buf
@@ -214,7 +265,7 @@ abstract class BinData
           {% elsif part[:type] == "string" %}
             {% if part[:length] %}
               # There is a length calculation
-              %size = __read_length__(({{part[:length]}}).call)
+              %size = __enforce_content_length__(__read_length__(({{part[:length]}}).call))
               %buf = Bytes.new(%size)
               io.read_fully(%buf)
               {% if part[:encoding] %}
