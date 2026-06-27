@@ -68,7 +68,17 @@ module ASN1
     end
 
     def tag_number=(tag_type : Int | UniversalTags)
-      @identifier.tag_number = tag_type.to_i.to_u8
+      n = tag_type.to_i
+      # The identifier's tag-number field is 5 bits, so only 0..30 fit directly.
+      # 31 (0b11111) is the reserved high-tag-number escape, and any value >= 31
+      # requires the extended continuation-byte form, which this accessor does
+      # not emit. Reject out-of-range values with a typed error rather than
+      # silently truncating to 5 bits (50 -> 18) or leaking an `OverflowError`
+      # from `to_u8` (>= 256). High-tag-number write support is tracked in #44.
+      unless 0 <= n <= 30
+        raise ASN1::InvalidTag.new("invalid tag number #{n}: must be 0..30 (high-tag-number form is not supported by tag_number=)")
+      end
+      @identifier.tag_number = n.to_u8
     end
 
     # The universal tag as a `UniversalTags` enum. Raises unless this is a
