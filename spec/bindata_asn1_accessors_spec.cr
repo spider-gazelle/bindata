@@ -19,16 +19,20 @@ describe "ASN1::BER typed accessors" do
       ber.get_hexstring.should eq("00ff")
     end
 
-    it "strips 0x prefixes and non-hex separators" do
+    it "strips a single leading 0x prefix" do
       ber = ASN1::BER.new
-      ber.set_hexstring("0xAB:CD")
+      ber.set_hexstring("0xABCD")
       ber.get_hexstring.should eq("abcd")
     end
 
-    it "left-pads an odd-length hexstring" do
-      ber = ASN1::BER.new
-      ber.set_hexstring("ABC")
-      ber.get_hexstring.should eq("0abc")
+    it "rejects interior non-hex instead of silently stripping it" do
+      # A separator inside the string (e.g. "AB:CD") used to be stripped, merging
+      # nibbles; it must now be rejected.
+      expect_raises(ArgumentError) { ASN1::BER.new.set_hexstring("AB:CD") }
+    end
+
+    it "rejects an odd-length hexstring instead of nibble-shifting it" do
+      expect_raises(ArgumentError) { ASN1::BER.new.set_hexstring("ABC") }
     end
   end
 

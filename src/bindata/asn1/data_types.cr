@@ -138,9 +138,12 @@ class ASN1::BER < BinData
     self.tag_class = tag_class
     self.tag_number = tag
 
-    string = string.gsub(/(0x|[^0-9A-Fa-f])*/, "")
-    string = "0#{string}" if string.size % 2 > 0
-    @payload = string.hexbytes
+    # Only a single leading `0x`/`0X` is stripped; everything else must already
+    # be clean even-length hex. The old code stripped non-hex *anywhere* (merging
+    # nibbles) and left-padded an odd length (shifting every nibble) — both
+    # silent corruption. `hexbytes?` rejects odd length and stray characters.
+    hex = string.lchop("0x").lchop("0X")
+    @payload = hex.hexbytes? || raise ArgumentError.new("invalid hexstring: #{string.inspect}")
     self
   end
 
