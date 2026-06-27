@@ -37,15 +37,9 @@ module ASN1
     field length : Length = Length.new
     property payload : Bytes = Bytes.new(0)
 
-    # Maximum number of payload bytes this object (and its children) may
-    # allocate or read. `0`, the default, means unlimited. Set a positive cap
-    # before reading untrusted input to guard against allocation/exhaustion DoS,
-    # reading the root explicitly so the cap is in place before parsing:
-    #
-    #     ber = ASN1::BER.new
-    #     ber.max_content_length = 64 * 1024
-    #     ber.read(io)
-    property max_content_length : Int32 = 0
+    # `max_content_length` is inherited from `BinData`; reading the root
+    # explicitly (rather than via `IO#read_bytes`) lets a cap be set before
+    # parsing, and `#children` propagates it to nested elements.
 
     def tag_class
       @identifier.tag_class
@@ -133,7 +127,10 @@ module ASN1
     private def ensure_content_length(size)
       return if @max_content_length <= 0
       if size > @max_content_length
-        raise ContentTooLarge.new("ASN.1 content length #{size} exceeds max_content_length #{@max_content_length}")
+        # Fully qualified: `BinData::ContentTooLarge` (an ancestor constant) would
+        # otherwise shadow this in BER's lexical scope, breaking the typed
+        # `ASN1::Error` contract.
+        raise ASN1::ContentTooLarge.new("ASN.1 content length #{size} exceeds max_content_length #{@max_content_length}")
       end
     end
 

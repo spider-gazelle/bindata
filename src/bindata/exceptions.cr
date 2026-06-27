@@ -37,6 +37,10 @@ abstract class BinData
     def initialize(@klass, @field, ex : Exception)
       super("Failed to parse #{klass}.#{field}", ex)
     end
+
+    def initialize(message)
+      super(message)
+    end
   end
 
   # Wraps any error raised while writing a field, tagged with its location.
@@ -45,4 +49,9 @@ abstract class BinData
       super("Failed to write #{klass}.#{field}", ex)
     end
   end
+
+  # Raised when a field would allocate or read more than `BinData#max_content_length`
+  # permits. A `ParseError` so it surfaces through the normal read error path
+  # without being re-wrapped.
+  class ContentTooLarge < ParseError; end
 end
