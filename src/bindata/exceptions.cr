@@ -54,4 +54,13 @@ abstract class BinData
   # permits. A `ParseError` so it surfaces through the normal read error path
   # without being re-wrapped.
   class ContentTooLarge < ParseError; end
+
+  # Wraps any error raised inside a `before_serialize` / `after_deserialize`
+  # callback, so callback failures stay within the `CustomException` hierarchy
+  # instead of leaking a bare `RuntimeError`. The original error is the `cause`.
+  class CallbackError < CustomException
+    def initialize(message, ex : Exception)
+      super(message, ex)
+    end
+  end
 end

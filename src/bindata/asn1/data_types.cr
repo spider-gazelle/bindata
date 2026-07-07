@@ -157,7 +157,9 @@ class ASN1::BER < BinData
     self.tag_class = tag_class
     self.tag_number = tag
 
-    @payload = data.to_slice
+    # Copy so the payload doesn't alias (and track later mutations of) the
+    # caller's buffer.
+    @payload = data.to_slice.dup
     self
   end
 
@@ -175,7 +177,9 @@ class ASN1::BER < BinData
     self.tag_class = tag_class
     self.tag_number = tag
 
-    @payload = string.to_slice
+    # `String#to_slice` is read-only; copy so the payload is independently
+    # mutable and doesn't alias the string's internal buffer.
+    @payload = string.to_slice.dup
     self
   end
 

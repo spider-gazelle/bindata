@@ -340,7 +340,7 @@ abstract class BinData
           end
         {% end %}
       rescue error
-        raise RuntimeError.new("error in after deserialize callback", cause: error)
+        raise CallbackError.new("error in after deserialize callback", error)
       end
 
       io
@@ -357,7 +357,7 @@ abstract class BinData
           end
         {% end %}
       rescue error
-        raise RuntimeError.new("error in before serialize callback", cause: error)
+        raise CallbackError.new("error in before serialize callback", error)
       end
 
       part_name = ""
@@ -547,7 +547,7 @@ abstract class BinData
       {% BIT_PARTS[INDEX[0]][name.id] = {"UInt128".id, value} %}
       property {{name.id}} : UInt128 = {% if default %} {{default}}.to_u128 {% else %} 0 {% end %}
     {% else %}
-      {{ "bits greater than 128 are not supported".id }}
+      {% raise "#{@type}##{name}: bit fields greater than 128 bits are not supported (got #{size})" %}
     {% end %}
 
     {% if resolved_type && resolved_type < Enum %}
