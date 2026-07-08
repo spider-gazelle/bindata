@@ -162,23 +162,58 @@ class ASN1::BER < BinData
     self
   end
 
-  # Returns a UTF8 string
-  def get_string
-    check_tags = {UniversalTags::UTF8String, UniversalTags::CharacterString, UniversalTags::PrintableString, UniversalTags::IA5String, UniversalTags::OctetString}
-    raise InvalidTag.new("not a universal tag: #{tag_class}") unless tag_class == TagClass::Universal
-    raise InvalidTag.new("object is a #{tag}, expecting one of #{check_tags}") unless check_tags.includes?(tag)
+  # String types whose repertoire is ASCII-compatible, so the UTF-8 `String.new`
+  # decodes them directly. (T61String / VideotexString use the T.61 / videotex
+  # character sets, which are neither ASCII nor UTF-8, so they are not decoded
+  # here rather than mis-decoded.)
+  DIRECT_STRING_TAGS = {
+    UniversalTags::UTF8String, UniversalTags::CharacterString,
+    UniversalTags::PrintableString, UniversalTags::IA5String,
+    UniversalTags::OctetString, UniversalTags::NumericString,
+    UniversalTags::VisibleString, UniversalTags::GeneralString,
+    UniversalTags::GraphicString,
+  }
 
-    String.new(@payload)
+  # Decodes the payload to a `String`. BMPString is transcoded from UTF-16BE and
+  # UniversalString from UTF-32BE (leniently — surrogate pairs are accepted, not
+  # strict UCS-2/UCS-4); the ASCII-repertoire types are read directly. An
+  # incomplete/malformed byte sequence raises `ASN1::InvalidPayload`; individual
+  # invalid code points may be substituted by the platform transcoder.
+  def get_string
+    raise InvalidTag.new("not a universal tag: #{tag_class}") unless tag_class == TagClass::Universal
+
+    case tag
+    when UniversalTags::BMPString
+      decode_string("UTF-16BE")
+    when UniversalTags::UniversalString
+      decode_string("UTF-32BE")
+    else
+      raise InvalidTag.new("object is a #{tag}, not a supported string type") unless DIRECT_STRING_TAGS.includes?(tag)
+      String.new(@payload)
+    end
   end
 
-  # Sets a UTF8 string
+  private def decode_string(encoding : String) : String
+    String.new(@payload, encoding)
+  rescue ex : ArgumentError
+    raise InvalidPayload.new("invalid #{encoding} string: #{ex.message}")
+  end
+
+  # Sets a string. BMPString is encoded to UTF-16BE and UniversalString to
+  # UTF-32BE; every other type stores the string's UTF-8 bytes. *tag* may be a
+  # `UniversalTags` or its integer value.
   def set_string(string, tag = UniversalTags::UTF8String, tag_class = TagClass::Universal)
     self.tag_class = tag_class
     self.tag_number = tag
 
-    # `String#to_slice` is read-only; copy so the payload is independently
-    # mutable and doesn't alias the string's internal buffer.
-    @payload = string.to_slice.dup
+    # Normalise so an integer tag (the accessor accepts `Int | UniversalTags`)
+    # still selects the right transcoding rather than silently storing UTF-8.
+    resolved = tag.is_a?(UniversalTags) ? tag : UniversalTags.new(tag.to_i)
+    @payload = case resolved
+               when UniversalTags::BMPString       then string.encode("UTF-16BE")
+               when UniversalTags::UniversalString then string.encode("UTF-32BE")
+               else                                     string.to_slice.dup
+               end
     self
   end
 
