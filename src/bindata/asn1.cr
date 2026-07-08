@@ -105,9 +105,11 @@ module ASN1
       @identifier.extended
     end
 
-    # The decoded payload length in bytes.
+    # The current payload length in bytes. Reads from the payload itself (not the
+    # decoded `Length`, which is only refreshed on `write`), so it is correct for
+    # in-memory-built objects and for indefinite-length elements too.
     def size
-      @length.length
+      @payload.size
     end
 
     def read(io : IO) : IO
@@ -173,7 +175,15 @@ module ASN1
 
     # Parses the payload as a sequence of nested BER elements. The
     # `max_content_length` and `max_depth` caps propagate to each child.
+    #
+    # Only valid for a constructed element; on a primitive the payload is raw
+    # content, not a TLV list, so parsing it would yield garbage. Raises
+    # `ASN1::Error` in that case.
     def children
+      unless constructed
+        raise ASN1::Error.new("children is only valid for a constructed element")
+      end
+
       # Refuse to descend past the limit, so a recursive consumer walk gets a
       # typed error instead of a stack overflow on a deeply nested message.
       if @max_depth > 0 && @depth >= @max_depth
@@ -195,7 +205,10 @@ module ASN1
       parts
     end
 
-    # Encodes *parts* into the payload and marks this element constructed.
+    # Encodes *parts* into the payload and marks this element constructed. The
+    # tag class/number are left untouched — set them yourself (e.g. to a universal
+    # `Sequence`/`Set`, or a constructed context tag) so `#sequence?` reflects the
+    # intended type; this accessor only guarantees the `constructed` flag.
     def children=(parts)
       self.constructed = true
       io = IO::Memory.new
