@@ -94,22 +94,20 @@ class ASN1::BER < BinData
       raise InvalidObjectId.new(oid)
     end
 
-    raise InvalidObjectId.new(oid) if arcs.empty?
+    # An OID has at least two arcs; a single-arc input used to be silently
+    # expanded (`"2"` -> `"2.0"` on read), so reject it.
+    raise InvalidObjectId.new(oid) if arcs.size < 2
     raise InvalidObjectId.new(oid) if arcs.any?(&.negative?)
     raise InvalidObjectId.new(oid) if arcs[0] > 2
-    raise InvalidObjectId.new(oid) if arcs.size > 1 && arcs[0] < 2 && arcs[1] >= 40
+    raise InvalidObjectId.new(oid) if arcs[0] < 2 && arcs[1] >= 40
 
     self.tag_class = TagClass::Universal
     self.tag_number = UniversalTags::ObjectIdentifier
 
     data = IO::Memory.new
-    if arcs.size > 1
-      # The first two arcs are combined into a single sub-identifier.
-      write_oid_sub_id(data, arcs[0] * 40 + arcs[1])
-      arcs[2..].each { |arc| write_oid_sub_id(data, arc) }
-    else
-      write_oid_sub_id(data, arcs[0] * 40)
-    end
+    # The first two arcs are combined into a single sub-identifier.
+    write_oid_sub_id(data, arcs[0] * 40 + arcs[1])
+    arcs[2..].each { |arc| write_oid_sub_id(data, arc) }
     @payload = data.to_slice
 
     self
@@ -195,10 +193,36 @@ class ASN1::BER < BinData
     self
   end
 
+  # Whether this is a well-formed universal NULL element: primitive, tag `05`,
+  # empty payload (X.690 §8.8).
+  def null?
+    tag_class == TagClass::Universal &&
+      !constructed &&
+      tag_number.to_i == UniversalTags::Null.to_i &&
+      @payload.empty?
+  end
+
+  # Sets an empty, primitive NULL payload (encodes as `05 00`).
+  def set_null
+    self.tag_class = TagClass::Universal
+    self.constructed = false
+    self.tag_number = UniversalTags::Null
+
+    @payload = Bytes.new(0)
+    self
+  end
+
   # Reads the payload as a two's-complement signed INTEGER (or ENUMERATED).
+  #
+  # With the default universal *check_class* the tag is validated against
+  # *check_tags*. With a non-universal *check_class* (e.g. an SNMP context-tagged
+  # Counter/Gauge) only the class is checked — the universal-tag check is skipped,
+  # since `check_tags` are universal tags and don't apply to a context tag.
   def get_integer(check_tags = {UniversalTags::Integer, UniversalTags::Enumerated}, check_class = TagClass::Universal) : Int64
-    raise InvalidTag.new("not a universal tag: #{tag_class}") unless tag_class == check_class
-    raise InvalidTag.new("object is a #{tag}, expecting one of #{check_tags}") unless check_tags.includes?(tag)
+    raise InvalidTag.new("not a #{check_class} tag: #{tag_class}") unless tag_class == check_class
+    if tag_class == TagClass::Universal
+      raise InvalidTag.new("object is a #{tag}, expecting one of #{check_tags}") unless check_tags.includes?(tag)
+    end
     return 0_i64 if @payload.size == 0
 
     # An INTEGER wider than 8 bytes cannot be represented in the Int64 this
