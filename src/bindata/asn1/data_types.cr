@@ -179,6 +179,77 @@ class ASN1::BER < BinData
     self
   end
 
+  # `YYMMDDHHMM[SS](Z|±HHMM)` — the seconds are optional.
+  UTCTIME_FORMAT = /\A(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?(Z|[+-]\d{4})\z/
+  # `YYYYMMDDHHMMSS(.fff)?(Z|±HHMM)`.
+  GENERALIZEDTIME_FORMAT = /\A(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\.\d+)?(Z|[+-]\d{4})\z/
+
+  # Reads the payload as a UTCTime or GeneralizedTime, normalised to UTC.
+  #
+  # A time zone is required (`Z` or a numeric `±HHMM` offset); a bare local time
+  # is rejected. UTCTime's two-digit year uses the RFC 5280 pivot (`>= 50` =>
+  # 19xx, `< 50` => 20xx).
+  def get_time : Time
+    raise InvalidTag.new("not a universal tag: #{tag_class}") unless tag_class == TagClass::Universal
+    text = String.new(@payload)
+
+    case tag
+    when UniversalTags::UTCTime
+      m = UTCTIME_FORMAT.match(text) || raise InvalidPayload.new("malformed UTCTime: #{text.inspect}")
+      yy = m[1].to_i
+      year = yy >= 50 ? 1900 + yy : 2000 + yy
+      asn1_time_to_utc(year, m[2], m[3], m[4], m[5], m[6]?, nil, m[7])
+    when UniversalTags::GeneralizedTime
+      m = GENERALIZEDTIME_FORMAT.match(text) || raise InvalidPayload.new("malformed GeneralizedTime: #{text.inspect}")
+      asn1_time_to_utc(m[1].to_i, m[2], m[3], m[4], m[5], m[6], m[7]?, m[8])
+    else
+      raise InvalidTag.new("object is a #{tag}, expecting UTCTime or GeneralizedTime")
+    end
+  end
+
+  # Builds a UTC `Time` from decoded ASN.1 time components (strings), shifting a
+  # numeric offset back to UTC. Raises `InvalidPayload` on out-of-range fields.
+  private def asn1_time_to_utc(year : Int32, month, day, hour, minute, second, fraction, zone) : Time
+    nanosecond = fraction ? (fraction.to_f * 1_000_000_000).to_i : 0
+    wall = Time.utc(year, month.to_i, day.to_i, hour.to_i, minute.to_i,
+      second ? second.to_i : 0, nanosecond: nanosecond)
+    return wall if zone == "Z"
+
+    off_hours = zone[1, 2].to_i
+    off_minutes = zone[3, 2].to_i
+    unless off_hours <= 23 && off_minutes <= 59
+      raise InvalidPayload.new("time zone offset out of range: #{zone}")
+    end
+    offset = off_hours.hours + off_minutes.minutes
+    zone[0] == '+' ? wall - offset : wall + offset
+  rescue ex : ArgumentError
+    raise InvalidPayload.new("invalid time components: #{ex.message}")
+  end
+
+  # Encodes *time* (converted to UTC) as a GeneralizedTime (default) or UTCTime,
+  # in the canonical `…Z` form. UTCTime can only represent years 1950..2049.
+  # Sub-second precision is dropped (DER forbids fractional seconds), so a `Time`
+  # with a fractional part does not round-trip exactly through `#get_time`.
+  def set_time(time : Time, tag = UniversalTags::GeneralizedTime)
+    utc = time.to_utc
+    text = case tag
+           when UniversalTags::GeneralizedTime
+             utc.to_s("%Y%m%d%H%M%SZ")
+           when UniversalTags::UTCTime
+             unless 1950 <= utc.year <= 2049
+               raise InvalidPayload.new("UTCTime cannot represent year #{utc.year}; use GeneralizedTime")
+             end
+             utc.to_s("%y%m%d%H%M%SZ")
+           else
+             raise InvalidTag.new("set_time expects UTCTime or GeneralizedTime, got #{tag}")
+           end
+
+    self.tag_class = TagClass::Universal
+    self.tag_number = tag
+    @payload = text.to_slice
+    self
+  end
+
   # Reads the payload as a BOOLEAN.
   def get_boolean
     ensure_universal(UniversalTags::Boolean)
