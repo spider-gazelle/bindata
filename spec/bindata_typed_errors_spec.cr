@@ -20,11 +20,12 @@ describe "typed errors" do
     expect_raises(ASN1::InvalidTag) { ber.tag }
   end
 
-  it "raises an ASN1::Error for a BIT STRING with unused bits" do
+  it "raises InvalidPayload for a BIT STRING with an out-of-range unused-bit count" do
+    # Unused-bit counts 0..7 are now supported; a count > 7 is malformed.
     ber = ASN1::BER.new
     ber.tag_number = ASN1::BER::UniversalTags::BitString
-    ber.payload = Bytes[0x04, 0xF0] # first byte = 4 unused bits (non-zero)
-    expect_raises(ASN1::Error) { ber.get_bitstring }
+    ber.payload = Bytes[0x08, 0xF0] # first byte = 8 unused bits (max is 7)
+    expect_raises(ASN1::InvalidPayload) { ber.get_bitstring }
   end
 
   it "surfaces a too-long length indicator as a typed InvalidLength cause" do

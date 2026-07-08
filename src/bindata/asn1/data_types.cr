@@ -1,4 +1,5 @@
 require "big"
+require "bit_array"
 
 class ASN1::BER < BinData
   # The ASN.1 universal tag numbers, in tag-number order.
@@ -306,15 +307,63 @@ class ASN1::BER < BinData
     self
   end
 
-  # Reads the payload as a BIT STRING (only the zero-unused-bits form is supported).
-  def get_bitstring
+  # Reads the BIT STRING data bytes (dropping the leading unused-bit count). The
+  # final byte's low `#bitstring_unused_bits` bits are padding. Any unused count
+  # 0..7 is accepted; use `#get_bit_array` for the exact significant bits.
+  def get_bitstring : Bytes
+    ensure_bitstring
+    @payload[1, @payload.size - 1]
+  end
+
+  # The number of unused (padding) bits in the final data byte (0..7).
+  def bitstring_unused_bits : UInt8
+    ensure_bitstring
+    @payload[0]
+  end
+
+  private def ensure_bitstring
     ensure_universal(UniversalTags::BitString)
     raise InvalidPayload.new("empty BIT STRING payload") if @payload.empty?
-    if @payload[0] == 0
-      @payload[1, @payload.size - 1]
-    else
-      # @payload[0] is the count of unused trailing bits — not handled yet
-      raise ASN1::Error.new("BIT STRING with unused bits is not supported")
+    raise InvalidPayload.new("BIT STRING unused-bit count out of range: #{@payload[0]}") if @payload[0] > 7
+    # With no data octets the unused-bit count must be 0 (else the significant
+    # bit count would be negative).
+    raise InvalidPayload.new("BIT STRING with no data must declare 0 unused bits") if @payload.size == 1 && @payload[0] != 0
+  end
+
+  # The BIT STRING's significant bits as a `BitArray`, numbered MSB-first from
+  # the first data byte (ASN.1 bit 0 is the high bit of the first byte).
+  def get_bit_array : BitArray
+    data = get_bitstring
+    total = data.size * 8 - bitstring_unused_bits
+    arr = BitArray.new(total)
+    total.times do |i|
+      arr[i] = (data[i // 8] >> (7 - (i % 8))) & 1 == 1
     end
+    arr
+  end
+
+  # Sets a BIT STRING from *bytes*, with *unused_bits* (0..7) of padding in the
+  # final byte.
+  def set_bitstring(bytes : Bytes, unused_bits : Int = 0)
+    raise ArgumentError.new("unused_bits must be 0..7, got #{unused_bits}") unless 0 <= unused_bits <= 7
+    raise ArgumentError.new("unused_bits must be 0 for an empty bit string") if bytes.empty? && unused_bits != 0
+
+    self.tag_class = TagClass::Universal
+    self.tag_number = UniversalTags::BitString
+
+    payload = Bytes.new(bytes.size + 1)
+    payload[0] = unused_bits.to_u8
+    bytes.copy_to(payload + 1)
+    @payload = payload
+    self
+  end
+
+  # Sets a BIT STRING from a `BitArray` (numbered MSB-first, as ASN.1 expects).
+  def set_bit_array(bits : BitArray)
+    data = Bytes.new((bits.size + 7) // 8)
+    bits.size.times do |i|
+      data[i // 8] |= (0x80_u8 >> (i % 8)) if bits[i]
+    end
+    set_bitstring(data, data.size * 8 - bits.size)
   end
 end
