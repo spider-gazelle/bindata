@@ -214,7 +214,8 @@ abstract class BinData
 
           {% elsif part[:type] == "array" %}
             %size = __enforce_content_length__(__read_length__(({{part[:length]}}).call))
-            @{{part[:name]}} = [] of {{part[:cls]}}
+            # Build the declared container (a `Set` field must not become an Array).
+            @{{part[:name]}} = {% if part[:container] %}{{part[:container]}}{% else %}Array({{part[:cls]}}){% end %}.new
             (0...%size).each do
               {% if part[:cls].resolve < BinData %}
                 %element = {{part[:cls]}}.new
@@ -227,7 +228,7 @@ abstract class BinData
             end
 
           {% elsif part[:type] == "variable_array" %}
-            @{{part[:name]}} = [] of {{part[:cls]}}
+            @{{part[:name]}} = {% if part[:container] %}{{part[:container]}}{% else %}Array({{part[:cls]}}){% end %}.new
             %count = 0
             loop do
               # Stop if the callback indicates there is no more
@@ -725,9 +726,9 @@ abstract class BinData
       __add_enum_field name: {{name}}, cls: typeof({{default}}.value), onlyif: {{onlyif}}, verify: {{verify}}, value: {{value}}, encoding: {{encoding}}, enum_type: {{resolved_type}}
     {% elsif resolved_type <= Array || resolved_type <= Set %}
       {% if length %}
-        {% PARTS << {type: "array", name: name, cls: resolved_type.type_vars[0], onlyif: onlyif, verify: verify, length: length, value: value} %}
+        {% PARTS << {type: "array", name: name, cls: resolved_type.type_vars[0], container: resolved_type, onlyif: onlyif, verify: verify, length: length, value: value} %}
       {% elsif read_next %}
-        {% PARTS << {type: "variable_array", name: name, cls: resolved_type.type_vars[0], onlyif: onlyif, verify: verify, read_next: read_next, value: value} %}
+        {% PARTS << {type: "variable_array", name: name, cls: resolved_type.type_vars[0], container: resolved_type, onlyif: onlyif, verify: verify, read_next: read_next, value: value} %}
       {% else %}
         {% raise "Array and Set fields require a length callback or read_next callback" %}
       {% end %}
