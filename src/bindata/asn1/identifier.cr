@@ -48,7 +48,14 @@ class ASN1::BER < BinData
           if @extended.size >= MAX_EXTENDED_BYTES
             raise InvalidTag.new("extended identifier exceeds #{MAX_EXTENDED_BYTES} bytes")
           end
-          extended_id = io.read_bytes(ExtendedIdentifier)
+          extended_id = begin
+            io.read_bytes(ExtendedIdentifier)
+          rescue IO::EOFError | BinData::ParseError
+            # A `more`-flagged continuation with no following byte: report a typed
+            # truncated-tag error. The continuation is a one-byte BinData bitfield,
+            # so a read failure here is a truncated tag (EOF, wrapped as ParseError).
+            raise InvalidTag.new("truncated extended identifier")
+          end
           @extended << extended_id
           break unless extended_id.more
         end

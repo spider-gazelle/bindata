@@ -11,7 +11,7 @@ class BinData::BitField
   end
 
   def bits(size, name)
-    raise ArgumentError.new("no support for structures larger than 128 bits") if size > 128
+    raise ArgumentError.new("bit field size must be between 1 and 128, got #{size}") unless 1 <= size <= 128
     @bitsize += size
     @mappings[name.to_s] = size
   end
