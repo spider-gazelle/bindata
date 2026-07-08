@@ -30,6 +30,10 @@ description = "Run the spec suite multi-threaded (fiber-safety gate)"
 run = "crystal spec --error-trace -Dpreview_mt {{vars.SPEC_OPTS}}"
 env = { CRYSTAL_WORKERS = "4" }
 
+[tasks."dev:docs"]
+description = "Build the API docs (fails on doc-comment / compile errors)"
+run = "crystal docs"
+
 [tasks."dev:check"]
 description = "Format-check, lint and test in one shot"
 run = "mise dev:format-check && mise dev:ameba && mise dev:spec && mise dev:spec-mt"

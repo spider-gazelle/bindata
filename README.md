@@ -67,8 +67,9 @@ see the [spec helper](https://github.com/spider-gazelle/bindata/blob/master/spec
     # existing value
     field size : UInt16, value: ->{ text.bytesize + 1 }
 
-    # String fields without a length use `\0` null byte termination
-    # Length is being calculated by the size field above
+    # This String has a `length:`, so it reads exactly that many bytes (here the
+    # length is derived from the `size` field above). A String *without* a
+    # `length:` is `\0` null-byte terminated instead.
     field text : String, length: ->{ size - 1 }
 
     # Bit fields should only be used when one or more fields are not byte aligned
