@@ -92,16 +92,16 @@ class BinData::BitField
           value = value & ((1_u16 << size) - 1_u16)
         end
       elsif size <= 32
-        io = IO::Memory.new(buffer)
-        # adjust buffer as required to read the value
-        if (io.size - io.pos) < 4
-          io_new = IO::Memory.new(Bytes.new(4))
-          io_new.write io.to_slice[io.pos..-1]
-          io = io_new
-          io.rewind
-        end
-
-        value = io.read_bytes(UInt32, IO::ByteFormat::BigEndian)
+        # Decode straight from the slice (no per-field IO::Memory). Only the rare
+        # short tail — fewer than 4 bytes left in the buffer — needs a padded
+        # scratch, matching the old behaviour (real bytes high, zero-padded low).
+        value = if buffer.size >= 4
+                  IO::ByteFormat::BigEndian.decode(UInt32, buffer)
+                else
+                  scratch = Bytes.new(4)
+                  buffer.copy_to(scratch)
+                  IO::ByteFormat::BigEndian.decode(UInt32, scratch)
+                end
         if size < 32
           # Shift the bits we're interested in towards 0 (as they are high bits)
           value = value >> (32 - size)
@@ -109,16 +109,13 @@ class BinData::BitField
           value = value & ((1_u32 << size) - 1_u32)
         end
       elsif size <= 64
-        io = IO::Memory.new(buffer)
-        # adjust buffer as required to read the value
-        if (io.size - io.pos) < 8
-          io_new = IO::Memory.new(Bytes.new(8))
-          io_new.write io.to_slice[io.pos..-1]
-          io = io_new
-          io.rewind
-        end
-
-        value = io.read_bytes(UInt64, IO::ByteFormat::BigEndian)
+        value = if buffer.size >= 8
+                  IO::ByteFormat::BigEndian.decode(UInt64, buffer)
+                else
+                  scratch = Bytes.new(8)
+                  buffer.copy_to(scratch)
+                  IO::ByteFormat::BigEndian.decode(UInt64, scratch)
+                end
         if size < 64
           # Shift the bits we're interested in towards 0 (as they are high bits)
           value = value >> (64 - size)
@@ -126,16 +123,13 @@ class BinData::BitField
           value = value & ((1_u64 << size) - 1_u64)
         end
       elsif size <= 128
-        io = IO::Memory.new(buffer)
-        # adjust buffer as required to read the value
-        if (io.size - io.pos) < 16
-          io_new = IO::Memory.new(Bytes.new(16))
-          io_new.write io.to_slice[io.pos..-1]
-          io = io_new
-          io.rewind
-        end
-
-        value = io.read_bytes(UInt128, IO::ByteFormat::BigEndian)
+        value = if buffer.size >= 16
+                  IO::ByteFormat::BigEndian.decode(UInt128, buffer)
+                else
+                  scratch = Bytes.new(16)
+                  buffer.copy_to(scratch)
+                  IO::ByteFormat::BigEndian.decode(UInt128, scratch)
+                end
         if size < 128
           # Shift the bits we're interested in towards 0 (as they are high bits)
           value = value >> (128 - size)
