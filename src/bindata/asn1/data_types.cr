@@ -42,6 +42,12 @@ class ASN1::BER < BinData
     raise InvalidTag.new("object is a #{tag}, expecting #{check_tag}") unless tag == check_tag
   end
 
+  # Largest sub-identifier we decode, in continuation octets. A base-128 arc of
+  # this many bytes holds ~224 bits — far beyond any real OID arc (a UUID-based
+  # `2.25` arc is 128-bit, ~19 bytes). Bounds the `BigInt` build against the
+  # super-linear CPU cost of a hostile continuation run.
+  MAX_OID_ARC_BYTES = 32
+
   # Returns the object ID in string format.
   #
   # Sub-identifiers are decoded as big-endian base-128 numbers per X.690 §8.19
@@ -50,29 +56,10 @@ class ASN1::BER < BinData
   # OIDs under `2.25`, ITU-T X.667).
   def get_object_id
     ensure_universal(UniversalTags::ObjectIdentifier)
+    raise InvalidObjectId.new("empty OBJECT IDENTIFIER") if @strict && @payload.empty?
     return "" if @payload.size == 0
 
-    # Decode the payload into its base-128 sub-identifiers. This is BER-permissive
-    # and does not reject non-minimal encodings (a leading 0x80 octet), which
-    # X.690 §8.19.2 forbids for DER but which decode unambiguously.
-    sub_ids = [] of BigInt
-    value = BigInt.new(0)
-    pending = false
-    @payload.each do |byte|
-      # A leading 0x80 starts a sub-identifier with a redundant zero septet.
-      if @strict && !pending && byte == 0x80_u8
-        raise ASN1::InvalidPayload.new("non-minimal OID sub-identifier in strict/DER mode")
-      end
-      value = value * 128 + (byte & 0x7f)
-      pending = true
-      if (byte & 0x80) == 0
-        sub_ids << value
-        value = BigInt.new(0)
-        pending = false
-      end
-    end
-    # A trailing continuation bit means the OID was truncated mid sub-identifier.
-    raise InvalidObjectId.new(@payload.inspect) if pending
+    sub_ids = decode_oid_sub_ids
 
     # The first sub-identifier encodes the first two arcs: Y0 = 40 * X + Y,
     # with X capped at 2 (X = 2 absorbs any second arc, which may be large).
@@ -85,6 +72,35 @@ class ASN1::BER < BinData
     arcs.concat(sub_ids[1..])
 
     arcs.join(".")
+  end
+
+  # Decodes the payload into its base-128 sub-identifiers (X.690 §8.19). This is
+  # BER-permissive and does not reject a non-minimal leading 0x80 (DER-forbidden)
+  # unless `strict`. Each sub-identifier is bounded to `MAX_OID_ARC_BYTES` to cap
+  # the super-linear `BigInt` cost of a hostile continuation run.
+  private def decode_oid_sub_ids : Array(BigInt)
+    sub_ids = [] of BigInt
+    value = BigInt.new(0)
+    pending = false
+    arc_bytes = 0
+    @payload.each do |byte|
+      if @strict && !pending && byte == 0x80_u8
+        raise ASN1::InvalidPayload.new("non-minimal OID sub-identifier in strict/DER mode")
+      end
+      arc_bytes += 1
+      raise InvalidObjectId.new("OID sub-identifier exceeds #{MAX_OID_ARC_BYTES} bytes") if arc_bytes > MAX_OID_ARC_BYTES
+      value = value * 128 + (byte & 0x7f)
+      pending = true
+      if (byte & 0x80) == 0
+        sub_ids << value
+        value = BigInt.new(0)
+        pending = false
+        arc_bytes = 0
+      end
+    end
+    # A trailing continuation bit means the OID was truncated mid sub-identifier.
+    raise InvalidObjectId.new(@payload.inspect) if pending
+    sub_ids
   end
 
   # Sets a string representing an object ID.

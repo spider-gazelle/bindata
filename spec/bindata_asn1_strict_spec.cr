@@ -105,6 +105,10 @@ describe "ASN1::BER strict mode" do
       strict_ber(ASN1::BER::UniversalTags::ObjectIdentifier, Bytes[0x2A, 0x81, 0x80, 0x01]).get_object_id
         .should eq("1.2.#{0x80 * 128 + 1}")
     end
+
+    it "rejects an empty OBJECT IDENTIFIER" do
+      expect_raises(ASN1::Error) { strict_ber(ASN1::BER::UniversalTags::ObjectIdentifier, Bytes.new(0)).get_object_id }
+    end
   end
 
   describe "strings" do
@@ -140,5 +144,26 @@ describe "ASN1::BER strict mode" do
     frame = Bytes[0x30, 0x04, 0x04, 0x81, 0x01, 0x41]
     root = read_strict(frame)
     expect_raises(ASN1::Error) { root.children }
+  end
+end
+
+# Not a strict-mode feature: the OID decoder builds a BigInt per sub-identifier,
+# so an over-long continuation run is a CPU-amplification vector (super-linear
+# multiply + decimal stringify). Bounded regardless of strict mode.
+describe "ASN1::BER OID sub-identifier bound" do
+  it "rejects an over-long sub-identifier" do
+    ber = ASN1::BER.new
+    ber.tag_number = ASN1::BER::UniversalTags::ObjectIdentifier
+    # a single ~40-byte sub-identifier (well past any real arc, incl. a UUID)
+    ber.payload = Bytes.new(40, 0x81_u8) + Bytes[0x01]
+    expect_raises(ASN1::InvalidObjectId) { ber.get_object_id }
+  end
+
+  it "still decodes a UUID-sized arc (128-bit)" do
+    # 2.25.<2^127> — a 128-bit second arc encodes in ~19 bytes, under the cap
+    oid = "2.25.#{BigInt.new(2) ** 127}"
+    ber = ASN1::BER.new
+    ber.set_object_id(oid)
+    ber.get_object_id.should eq(oid)
   end
 end
