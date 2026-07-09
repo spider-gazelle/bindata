@@ -41,11 +41,13 @@ module ASN1
     # explicitly (rather than via `IO#read_bytes`) lets a cap be set before
     # parsing, and `#children` propagates it to nested elements.
 
-    # Maximum nesting depth that `#children` will descend before raising
-    # `MaxDepthExceeded`. The default (100) guards a recursive consumer walk
-    # against stack overflow on a deeply nested message (a few KB of `30 80 …`
-    # encodes thousands of levels); `0` disables the limit. Propagated to each
-    # child alongside `max_content_length`.
+    # Maximum nesting depth that `#children` and the indefinite-length reader will
+    # descend before raising `MaxDepthExceeded`. The default (100) guards both a
+    # recursive consumer `#children` walk and the eager recursion of `#read` over
+    # nested indefinite-length elements against stack overflow (a few KB of
+    # `30 80 …` / `24 80 …` encodes thousands of levels); `0` disables the limit
+    # (and with it the indefinite-read recursion bound). Propagated to each child
+    # alongside `max_content_length`.
     property max_depth : Int32 = 100
 
     # This element's depth in the parse tree (root = 0). Set by the parent's
@@ -115,24 +117,40 @@ module ASN1
     def read(io : IO) : IO
       super(io)
       if @length.indefinite?
-        temp = IO::Memory.new
-        # Read with one byte of look-ahead so the terminating `00 00` is detected
-        # without being written into the payload. Seed with the first content byte
-        # itself — seeding with a fake sentinel would prepend it to the payload.
-        previous_byte = io.read_byte ||
-                        raise ASN1::Error.new("unexpected end of input in indefinite-length BER content")
-        loop do
-          current_byte = io.read_byte ||
-                         raise ASN1::Error.new("unexpected end of input in indefinite-length BER content")
-          break if previous_byte == 0_u8 && current_byte == 0_u8
-          temp.write_byte previous_byte
-          ensure_content_length(temp.pos)
-          previous_byte = current_byte
+        # Indefinite content is a sequence of complete TLV elements terminated by
+        # an end-of-contents `00 00`. Walk them (rather than scanning for the first
+        # `00 00`, which a `00 00` inside a nested element would trip) and store
+        # their re-encoded bytes as the payload. This walk recurses into nested
+        # indefinite elements, so it is bounded by `max_depth`.
+        #
+        # The payload is the children re-encoded, so the round-trip is byte-exact
+        # for minimally-encoded content; a non-minimal inner length is normalised.
+        if @max_depth > 0 && @depth >= @max_depth
+          raise MaxDepthExceeded.new("ASN.1 nesting depth exceeds max_depth #{@max_depth}")
         end
 
-        @payload = Bytes.new(temp.pos)
-        temp.rewind
-        temp.read_fully(@payload)
+        content = IO::Memory.new
+        loop do
+          child = BER.new
+          child.max_content_length = @max_content_length
+          child.max_depth = @max_depth
+          child.depth = @depth + 1
+          begin
+            child.read(io)
+          rescue ex : ASN1::Error
+            raise ex
+          rescue ex
+            # A malformed / truncated element (not valid TLV) is rejected. The
+            # original error is kept as the cause, so a transport `IO::Error` can
+            # still be told apart from bad data.
+            raise ASN1::Error.new("malformed indefinite-length BER content: #{ex.message}", ex)
+          end
+          break if child.eoc?
+          child.write(content)
+          ensure_content_length(content.pos)
+        end
+
+        @payload = content.to_slice
       else
         # Guard before allocating: the declared length is attacker-controlled.
         ensure_content_length(@length.length)
@@ -163,6 +181,16 @@ module ASN1
       io.write(@payload)
       io.write_bytes(0_u16) if @length.indefinite?
       0_i64
+    end
+
+    # Whether this is an end-of-contents marker (`00 00`) — a primitive universal
+    # EndOfContent element with an empty payload, used to terminate indefinite
+    # content.
+    def eoc?
+      tag_class == TagClass::Universal &&
+        !constructed &&
+        tag_number.to_i == UniversalTags::EndOfContent.to_i &&
+        @payload.empty?
     end
 
     # Whether this is a constructed universal Sequence or Set, i.e. an element

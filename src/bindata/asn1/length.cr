@@ -47,6 +47,13 @@ class ASN1::BER < BinData
     end
 
     def write(io : IO)
+      # Preserve the indefinite marker (0x80) as read, rather than collapsing it
+      # to a definite long-form length. `BER#write` appends the 00 00 EOC.
+      if indefinite?
+        super(io)
+        return 0_i64
+      end
+
       # Lengths 0..127 fit in short form; only 128+ need long form.
       self.long = true if @length > 127
 
