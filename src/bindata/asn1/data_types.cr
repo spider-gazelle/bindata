@@ -59,6 +59,10 @@ class ASN1::BER < BinData
     value = BigInt.new(0)
     pending = false
     @payload.each do |byte|
+      # A leading 0x80 starts a sub-identifier with a redundant zero septet.
+      if @strict && !pending && byte == 0x80_u8
+        raise ASN1::InvalidPayload.new("non-minimal OID sub-identifier in strict/DER mode")
+      end
       value = value * 128 + (byte & 0x7f)
       pending = true
       if (byte & 0x80) == 0
@@ -182,15 +186,20 @@ class ASN1::BER < BinData
   def get_string
     raise InvalidTag.new("not a universal tag: #{tag_class}") unless tag_class == TagClass::Universal
 
-    case tag
-    when UniversalTags::BMPString
-      decode_string("UTF-16BE")
-    when UniversalTags::UniversalString
-      decode_string("UTF-32BE")
-    else
-      raise InvalidTag.new("object is a #{tag}, not a supported string type") unless DIRECT_STRING_TAGS.includes?(tag)
-      String.new(@payload)
-    end
+    string = case tag
+             when UniversalTags::BMPString
+               decode_string("UTF-16BE")
+             when UniversalTags::UniversalString
+               decode_string("UTF-32BE")
+             else
+               raise InvalidTag.new("object is a #{tag}, not a supported string type") unless DIRECT_STRING_TAGS.includes?(tag)
+               String.new(@payload)
+             end
+
+    # Reject an embedded NUL (a decoded character, not a raw byte — BMP/Universal
+    # legitimately contain 0x00 bytes) to close CN-NUL injection.
+    raise ASN1::InvalidPayload.new("embedded NUL in string (strict/DER mode)") if @strict && string.includes?('\0')
+    string
   end
 
   private def decode_string(encoding : String) : String
@@ -292,6 +301,9 @@ class ASN1::BER < BinData
   def get_boolean
     ensure_universal(UniversalTags::Boolean)
     raise InvalidPayload.new("empty BOOLEAN payload") if @payload.empty?
+    if @strict && !(@payload.size == 1 && (@payload[0] == 0x00_u8 || @payload[0] == 0xFF_u8))
+      raise ASN1::InvalidPayload.new("non-canonical BOOLEAN in strict/DER mode")
+    end
     @payload[0] != 0_u8
   end
 
@@ -334,6 +346,7 @@ class ASN1::BER < BinData
     if tag_class == TagClass::Universal
       raise InvalidTag.new("object is a #{tag}, expecting one of #{check_tags}") unless check_tags.includes?(tag)
     end
+    ensure_minimal_integer if @strict
     return 0_i64 if @payload.size == 0
 
     # An INTEGER wider than 8 bytes cannot be represented in the Int64 this
@@ -367,8 +380,19 @@ class ASN1::BER < BinData
   end
 
   # Returns the INTEGER payload as raw bytes, with a leading zero/sign pad removed.
+  # DER INTEGER: at least one content octet, and no redundant leading 0x00
+  # (positive) / 0xFF (negative) octet.
+  private def ensure_minimal_integer
+    raise ASN1::InvalidPayload.new("empty INTEGER content in strict/DER mode") if @payload.empty?
+    return if @payload.size < 2
+    redundant = (@payload[0] == 0x00_u8 && (@payload[1] & 0x80) == 0) ||
+                (@payload[0] == 0xFF_u8 && (@payload[1] & 0x80) != 0)
+    raise ASN1::InvalidPayload.new("non-minimal INTEGER encoding in strict/DER mode") if redundant
+  end
+
   def get_integer_bytes : Bytes
     ensure_universal(UniversalTags::Integer)
+    ensure_minimal_integer if @strict
     return Bytes.new(0) if @payload.empty?
 
     # Unsigned magnitude only: a negative INTEGER (high bit of the first octet

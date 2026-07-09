@@ -54,6 +54,18 @@ module ASN1
     # `#children` so the limit is enforced relative to where parsing started.
     protected property depth : Int32 = 0
 
+    # When set, reject non-canonical (DER) encodings: non-minimal / indefinite
+    # length, non-`{00,FF}` / multi-byte BOOLEAN, empty / non-minimal INTEGER,
+    # non-minimal OID, embedded-NUL strings, and an out-of-order **universal**
+    # SET OF (tag 17). Default `false` keeps the BER-permissive behaviour. Set it
+    # before reading (the length checks fire during `read`), and it propagates to
+    # `#children`.
+    #
+    # Not (yet) covered: an implicitly context-tagged SET OF (indistinguishable
+    # from a SEQUENCE without a schema), GeneralizedTime/UTCTime canonical form,
+    # BIT STRING padding bits, and the primitive-vs-constructed rule for strings.
+    property? strict : Bool = false
+
     def tag_class
       @identifier.tag_class
     end
@@ -116,6 +128,7 @@ module ASN1
 
     def read(io : IO) : IO
       super(io)
+      ensure_minimal_length if @strict
       if @length.indefinite?
         # Indefinite content is a sequence of complete TLV elements terminated by
         # an end-of-contents `00 00`. Walk them (rather than scanning for the first
@@ -163,6 +176,15 @@ module ASN1
         end
       end
       io
+    end
+
+    # DER length rules (strict mode): definite form only, short form for 0..127,
+    # and long form otherwise with no leading zero octets.
+    private def ensure_minimal_length
+      raise ASN1::InvalidLength.new("indefinite length is not allowed in strict/DER mode") if @length.indefinite?
+      return unless @length.long
+      raise ASN1::InvalidLength.new("non-minimal length: value #{@length.length} fits the short form") if @length.length <= 127
+      raise ASN1::InvalidLength.new("non-minimal length: leading zero octet") if !@length.long_bytes.empty? && @length.long_bytes[0] == 0_u8
     end
 
     private def ensure_content_length(size)
@@ -221,16 +243,33 @@ module ASN1
       parts = [] of BER
       io = IO::Memory.new(@payload)
       while io.pos < io.size
-        # Propagate the caps so a small frame can't smuggle an oversized or
-        # over-deep child.
+        # Propagate the caps (and strict mode) so a small frame can't smuggle an
+        # oversized / over-deep / non-canonical child.
         child = BER.new
         child.max_content_length = @max_content_length
         child.max_depth = @max_depth
         child.depth = @depth + 1
+        child.strict = @strict
         child.read(io)
         parts << child
       end
+
+      ensure_set_of_ordering(parts) if @strict && set?
       parts
+    end
+
+    # Whether this is a universal SET (used for the DER SET OF ordering rule).
+    private def set?
+      tag_class == TagClass::Universal &&
+        tag_number.to_i == UniversalTags::Set.to_i
+    end
+
+    # DER SET OF: the elements must be sorted by their encoding.
+    private def ensure_set_of_ordering(parts)
+      encodings = parts.map(&.to_slice)
+      encodings.each_cons_pair do |a, b|
+        raise ASN1::Error.new("SET OF elements are not in canonical order") if (a <=> b) > 0
+      end
     end
 
     # Encodes *parts* into the payload and marks this element constructed. The
