@@ -369,10 +369,19 @@ class ASN1::BER < BinData
   # Returns the INTEGER payload as raw bytes, with a leading zero/sign pad removed.
   def get_integer_bytes : Bytes
     ensure_universal(UniversalTags::Integer)
-    return Bytes.new(0) if @payload.size == 0
-    return Bytes[0] if @payload.size == 1 && {0xFF_u8, 0_u8}.includes?(@payload[0])
-    return @payload[1..-1] if @payload[0] == 0_u8
-    @payload
+    return Bytes.new(0) if @payload.empty?
+
+    # Unsigned magnitude only: a negative INTEGER (high bit of the first octet
+    # set) has no meaningful magnitude here, so reject it rather than return
+    # nonsense (it used to return Bytes[0] for -1).
+    raise InvalidPayload.new("get_integer_bytes is only valid for a non-negative INTEGER") if (@payload[0] & 0x80) != 0
+
+    # Drop leading 0x00 padding for the minimal magnitude, keeping one byte for 0.
+    bytes = @payload
+    while bytes.size > 1 && bytes[0] == 0_u8
+      bytes = bytes[1..]
+    end
+    bytes
   end
 
   # Encodes *value* as a minimal two's-complement INTEGER payload.

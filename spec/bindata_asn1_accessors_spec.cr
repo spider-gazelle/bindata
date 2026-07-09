@@ -50,9 +50,15 @@ describe "ASN1::BER typed accessors" do
       int_bytes(Bytes.new(0)).should eq(Bytes.new(0))
     end
 
-    it "collapses a single 0x00 or 0xFF sign byte to a single zero byte" do
+    it "keeps a single zero byte for value 0" do
       int_bytes(Bytes[0x00]).should eq(Bytes[0])
-      int_bytes(Bytes[0xFF]).should eq(Bytes[0])
+    end
+
+    it "rejects a negative INTEGER (unsigned-magnitude contract)" do
+      ber = ASN1::BER.new
+      ber.tag_number = ASN1::BER::UniversalTags::Integer
+      ber.payload = Bytes[0xFF] # -1
+      expect_raises(ASN1::InvalidPayload) { ber.get_integer_bytes }
     end
 
     it "drops a leading 0x00 pad byte" do
