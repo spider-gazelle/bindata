@@ -174,6 +174,19 @@ abstract class BinData
     size
   end
 
+  # Writes *count* zero bytes to *io* in bounded chunks, so a large `skip` region
+  # is emitted without allocating the whole run at once.
+  protected def __write_zeros__(io : IO, count) : Nil
+    remaining = count.to_i
+    return if remaining <= 0
+    chunk = Bytes.new(remaining < 4096 ? remaining : 4096)
+    while remaining > 0
+      n = remaining < chunk.size ? remaining : chunk.size
+      io.write(chunk[0, n])
+      remaining -= n
+    end
+  end
+
   macro __build_methods__
     protected def __perform_read__(io : IO) : IO
       # Support inheritance
@@ -457,7 +470,7 @@ abstract class BinData
 
           {% elsif part[:type] == "skip" %}
             # nothing was stored: emit the skipped region as zero padding
-            io.write(Bytes.new(({{part[:length]}}).call))
+            __write_zeros__(io, ({{part[:length]}}).call)
           {% end %}
 
           {% if part[:onlyif] %}
