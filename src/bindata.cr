@@ -547,7 +547,10 @@ abstract class BinData
     {% end %}
 
     %field = @@bit_fields["{{KLASS_NAME[0]}}_{{INDEX[0]}}"]?
-    raise "#{KLASS_NAME[0]}#{ '#' }{{name}} is not defined in a bitfield. Using bitfield macro outside of a bitfield" unless %field
+    # Defensive: `bits` outside a `bit_field` block normally fails to compile
+    # earlier (the `BIT_PARTS[INDEX[0]]` access below), so this is unreachable in
+    # practice; raise a typed error rather than a bare `RuntimeError` if it fires.
+    raise ::BinData::CustomException.new("#{KLASS_NAME[0]}#{ '#' }{{name}} is not defined in a bitfield. Using bitfield macro outside of a bitfield") unless %field
     %field.bits({{size}}, {{name.id.stringify}})
 
     {% if size <= 8 %}
