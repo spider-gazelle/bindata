@@ -229,6 +229,11 @@ module ASN1
     # Only valid for a constructed element; on a primitive the payload is raw
     # content, not a TLV list, so parsing it would yield garbage. Raises
     # `ASN1::Error` in that case.
+    #
+    # NOTE: this re-parses `@payload` on every call and returns a fresh array of
+    # freshly-decoded children — it is not memoized (the payload is mutable, so a
+    # cache would risk going stale). Bind the result to a local if you access the
+    # children repeatedly on the same element.
     def children
       unless constructed
         raise ASN1::Error.new("children is only valid for a constructed element")
