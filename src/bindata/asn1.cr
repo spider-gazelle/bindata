@@ -171,8 +171,11 @@ module ASN1
           @payload = Bytes.new(@length.length)
           io.read_fully(@payload)
         rescue ArgumentError
-          # Typically occurs if length is negative
-          raise ArgumentError.new("invalid ASN.1 length: #{@length.length}")
+          # Defensive: `Length#read` already rejects negative / Int32-overflow
+          # lengths with a typed `InvalidLength`, so a negative `@length.length`
+          # cannot reach `Bytes.new` from the wire. Keep the guard, but raise a
+          # typed `ASN1::InvalidLength` rather than leaking a bare `ArgumentError`.
+          raise ASN1::InvalidLength.new("invalid ASN.1 length: #{@length.length}")
         end
       end
       io
