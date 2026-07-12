@@ -198,9 +198,9 @@ A constructed element (a Sequence or Set) can be split into / built from its chi
 seq = io.read_bytes(ASN1::BER)
 seq.children # => [ASN1::BER, ASN1::BER, ...]
 
-out = ASN1::BER.new
-out.tag_number = ASN1::BER::UniversalTags::Sequence
-out.children = [child1, child2]
+sequence = ASN1::BER.new
+sequence.tag_number = ASN1::BER::UniversalTags::Sequence
+sequence.children = [child1, child2]
 ```
 
 When parsing untrusted input, set a `max_content_length` before reading so a hostile
