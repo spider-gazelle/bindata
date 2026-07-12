@@ -32,8 +32,13 @@ abstract class BinData
     BEFORE_SERIALIZE = [] of Nil
     AFTER_DESERIALIZE = [] of Nil
 
+    # Memoized per class: bit fields are registered at class-definition time and
+    # never change at runtime, so the merged map (parent's + this class's) is
+    # stable. Caching it avoids rebuilding the Hash on every (de)serialization.
+    @@merged_bit_fields : Hash(String, BitField)? = nil
+
     def self.bit_fields
-      {{@type.ancestors[0].id}}.bit_fields.merge(@@bit_fields)
+      @@merged_bit_fields ||= {{@type.ancestors[0].id}}.bit_fields.merge(@@bit_fields)
     end
 
     macro finished
